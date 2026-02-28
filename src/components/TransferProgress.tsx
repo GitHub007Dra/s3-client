@@ -316,8 +316,12 @@ const TransferProgress: React.FC = () => {
             <div className="transfer-panel-header">
               <div className="panel-title">
                 <div className="panel-icon">
-                  <Upload size={18} />
-                  <Download size={18} />
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2v8"/>
+                    <path d="m5 7 7-5 7 5"/>
+                    <path d="M4 10h16v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V10Z"/>
+                    <path d="M12 14v4"/>
+                  </svg>
                 </div>
                 <span>传输中心</span>
                 <span className="panel-count">{taskCount}</span>

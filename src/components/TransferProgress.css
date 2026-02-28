@@ -177,11 +177,15 @@
 .panel-icon {
   display: flex;
   align-items: center;
-  color: var(--transfer-primary);
+  color: var(--transfer-success);
 }
 
-.panel-icon svg:last-child {
-  margin-left: -8px;
+.panel-icon svg {
+  transition: transform 0.2s ease;
+}
+
+.panel-icon:hover svg {
+  transform: scale(1.05);
 }
 
 .panel-count {
@@ -271,7 +275,7 @@
 }
 
 .transfer-tab.active {
-  background: var(--transfer-primary);
+  background: var(--transfer-success);
   color: white;
 }
 
