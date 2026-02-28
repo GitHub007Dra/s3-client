@@ -4,6 +4,7 @@
   width: 100%;
   height: 100%;
   background-color: var(--bg-primary);
+  min-width: 0;
 }
 
 .app-header {
@@ -308,6 +309,7 @@
 .file-browser {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   height: 100%;
   width: 100%;
   background-color: #fff;
@@ -315,6 +317,7 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   overflow: hidden;
   min-height: 0;
+  min-width: 0;
 }
 
 .file-toolbar {
@@ -364,18 +367,52 @@
 }
 
 .file-breadcrumb {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(50, max-content);
+  grid-auto-flow: column;
   padding: 8px 16px;
   border-bottom: 1px solid #e0e0e0;
   background-color: #fff;
   font-size: 13px;
+  box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin: 0;
+  text-align: left;
+  justify-items: start;
+}
+
+.file-breadcrumb > * {
+  font-size: 13px;
+  margin: 0;
+  padding: 0;
+  white-space: nowrap;
+  grid-column: auto;
+}
+
+.file-breadcrumb .breadcrumb-item,
+.file-breadcrumb .breadcrumb-separator {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.file-breadcrumb .breadcrumb-separator {
+  padding-left: 4px;
+  padding-right: 4px;
 }
 
 .breadcrumb-item {
-  color: #666;
+  color: #666 !important;
   cursor: pointer;
   transition: color 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0 !important;
+  padding: 0 !important;
+  float: none !important;
+  display: inline-block !important;
+  flex-shrink: 0 !important;
 }
 
 .breadcrumb-item:hover {
@@ -386,16 +423,44 @@
   color: #333;
   font-weight: 500;
   cursor: default;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+  padding: 0;
 }
 
 .breadcrumb-item.bucket-name {
   color: #10b981;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+  padding: 0;
 }
 
 .breadcrumb-separator {
-  margin: 0 8px;
+  margin: 0 4px 0 0 !important;
   color: #ccc;
+  flex-shrink: 0 !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+/* 面包屑导航滚动条 */
+.file-breadcrumb::-webkit-scrollbar {
+  height: 4px;
+}
+
+.file-breadcrumb::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.file-breadcrumb::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 2px;
 }
 
 /* 文件内容区：左侧文件夹树 + 右侧文件列表 */

@@ -417,16 +417,38 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
       </div>
 
       {/* 面包屑导航 */}
-      <div className="file-breadcrumb">
-        <span className="breadcrumb-item bucket-name" onClick={() => dispatch(setCurrentPath(''))}>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'row',
+        justifyContent: 'flex-start',
+        alignItems: 'center',
+        width: '100%',
+        padding: '8px 16px',
+        borderBottom: '1px solid #e0e0e0',
+        backgroundColor: '#fff',
+        fontSize: '13px',
+        boxSizing: 'border-box',
+        overflowX: 'auto',
+        overflowY: 'hidden',
+        margin: 0
+      }}>
+        <span
+          onClick={() => dispatch(setCurrentPath(''))}
+          style={{ color: '#10b981', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+        >
           {bucket.name}
         </span>
         {breadcrumb.map((part, index) => (
           <React.Fragment key={index}>
-            <span className="breadcrumb-separator">/</span>
+            <span style={{ margin: '0 4px', color: '#ccc' }}>›</span>
             <span
-              className={`breadcrumb-item ${index === breadcrumb.length - 1 ? 'active' : ''}`}
               onClick={() => handleBreadcrumbClick(index)}
+              style={{
+                color: index === breadcrumb.length - 1 ? '#333' : '#666',
+                cursor: 'pointer',
+                fontWeight: index === breadcrumb.length - 1 ? 500 : 400,
+                whiteSpace: 'nowrap'
+              }}
             >
               {part}
             </span>
@@ -526,7 +548,6 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
       {/* 状态栏 */}
       <div className="file-statusbar">
         <span>共 {items.length} 个项目</span>
-        <span>已选择 {selectedItems.size} 个</span>
       </div>
 
       {/* 新建文件夹弹窗 */}
