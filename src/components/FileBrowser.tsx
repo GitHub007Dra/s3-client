@@ -569,7 +569,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
                           handleDownload(item);
                         }}
                         onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.setProperty('background-color', '#e0e0e0', 'important');
+                          (e.currentTarget as HTMLElement).style.setProperty('background-color', '#dcfce7', 'important');
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.backgroundColor = '';
@@ -588,7 +588,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
                           handleShare(item);
                         }}
                         onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.setProperty('background-color', '#e0e0e0', 'important');
+                          (e.currentTarget as HTMLElement).style.setProperty('background-color', '#dcfce7', 'important');
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.backgroundColor = '';

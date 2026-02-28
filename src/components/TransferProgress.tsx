@@ -288,9 +288,6 @@ const TransferProgress: React.FC = () => {
               </>
             ) : (
               <>
-                <div className="indicator-icon completed">
-                  <CheckCircle2 size={16} />
-                </div>
                 <span className="indicator-count">{completedTasks.length}</span>
                 <span className="indicator-text">已完成</span>
               </>
