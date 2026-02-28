@@ -23,6 +23,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
   const [newFolderName, setNewFolderName] = useState('');
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
@@ -194,6 +195,51 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
   // 处理文件夹上传
   const handleUploadFolderClick = () => {
     folderInputRef.current?.click();
+  };
+
+  // 处理拖拽进入
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  // 处理拖拽离开
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  // 处理拖拽悬停
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  // 处理文件放置
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0 || !bucket || !connectionId) return;
+
+    const s3Service = new S3Service(dispatch);
+    
+    for (const file of Array.from(files)) {
+      const key = currentPath + file.name;
+      try {
+        await s3Service.uploadFile(file, connectionId, bucket.name, key);
+      } catch (err) {
+        console.error('Upload failed:', err);
+        alert(`上传文件 ${file.name} 失败: ${err instanceof Error ? err.message : '未知错误'}`);
+      }
+    }
+
+    // 刷新文件列表
+    loadFiles(connectionId, bucket.name, currentPath);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -371,7 +417,17 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
   }
 
   return (
-    <div className="file-browser">
+    <div
+      className="file-browser"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+      style={isDragging ? {
+        border: '2px dashed #10b981',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)'
+      } : undefined}
+    >
       {/* 工具栏 */}
       <div className="file-toolbar">
         <div className="toolbar-left">
