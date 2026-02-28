@@ -1,8 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Provider, useSelector, useDispatch } from 'react-redux';
-import { store, type RootState, type AppDispatch } from './renderer/store';
-import { toggleTheme, setTheme } from './renderer/store/slices/themeSlice';
-import { StorageService } from './renderer/services/storageService';
+import { useState } from 'react';
+import { Provider } from 'react-redux';
+import { store } from './renderer/store';
 import Sidebar from './components/Sidebar';
 import FileBrowser from './components/FileBrowser';
 import ConnectionModal from './components/ConnectionModal';
@@ -10,31 +8,11 @@ import TransferProgress from './components/TransferProgress';
 import type { Bucket } from './shared/types';
 import './App.css';
 
-// 内部组件，可以使用 Redux hooks
+// 内部组件
 function AppContent() {
   const [currentBucket, setCurrentBucket] = useState<Bucket | null>(null);
   const [currentConnectionId, setCurrentConnectionId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
-  const theme = useSelector((state: RootState) => state.theme.mode);
-  const dispatch = useDispatch<AppDispatch>();
-
-  // 初始化主题 - 在组件挂载时立即应用
-  useEffect(() => {
-    const savedTheme = StorageService.loadTheme();
-    // 立即应用到 DOM
-    document.documentElement.setAttribute('data-theme', savedTheme);
-    // 如果 Redux 状态不同步，更新 Redux
-    if (savedTheme !== theme) {
-      dispatch(setTheme(savedTheme));
-    }
-  }, []);
-
-  // 保存主题变化并应用到 DOM
-  useEffect(() => {
-    StorageService.saveTheme(theme);
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
 
   const handleConnectionSelect = (connectionId: string) => {
     setCurrentConnectionId(connectionId);
@@ -53,21 +31,10 @@ function AppContent() {
     setIsModalOpen(false);
   };
 
-  const handleToggleTheme = () => {
-    dispatch(toggleTheme());
-  };
-
   return (
     <div className="app-container">
       <header className="app-header">
         <h1 className="app-title">S3 客户端</h1>
-        <button
-          className="theme-toggle-btn"
-          onClick={handleToggleTheme}
-          title={theme === 'light' ? '切换到暗色主题' : '切换到亮色主题'}
-        >
-          {theme === 'light' ? '🌙' : '☀️'}
-        </button>
       </header>
       
       <main className="app-main">

@@ -556,6 +556,22 @@
   height: 36px;
 }
 
+/* 暗色模式下的表格样式 */
+[data-theme="dark"] .file-table th {
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-bottom-color: var(--border-color);
+}
+
+[data-theme="dark"] .file-table td {
+  color: var(--text-primary);
+  border-bottom-color: var(--border-light);
+}
+
+[data-theme="dark"] .file-table tbody tr:hover {
+  background-color: var(--bg-hover);
+}
+
 /* 表格列宽定义 - 确保对齐 */
 .file-table th.col-name,
 .file-table td.col-name {
@@ -739,6 +755,24 @@ td.col-actions .action-btn-wrapper {
 
 .file-table td.col-actions .action-btn.delete:hover {
   background-color: rgba(244, 63, 94, 0.1) !important;
+}
+
+/* 暗色模式下的按钮样式 */
+[data-theme="dark"] .file-table td.col-actions .action-btn {
+  color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] .file-table td.col-actions .action-btn:hover {
+  background-color: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .file-table td.col-actions .action-btn.delete {
+  color: var(--accent-red) !important;
+}
+
+[data-theme="dark"] .file-table td.col-actions .action-btn.delete:hover {
+  background-color: rgba(244, 63, 94, 0.2) !important;
 }
 
 .file-statusbar {

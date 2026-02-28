@@ -24,6 +24,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   // 加载文件列表
   useEffect(() => {
@@ -51,17 +52,20 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
       s3Objects.forEach(obj => {
         const key = obj.key;
         
+        // 跳过当前路径本身
+        if (key === prefix || key === prefix.slice(0, -1)) return;
+        
         if (prefixLen > 0) {
           // 非根目录
           if (!key.startsWith(prefix)) return;
           
           const relativePath = key.slice(prefixLen);
-          const parts = relativePath.split('/');
+          const parts = relativePath.split('/').filter(Boolean);
           
-          // 只处理直接子项（路径中只有一个 /）
+          // 只处理直接子项（路径中只有一个部分）
           if (parts.length === 1) {
-            // 直接文件
-            if (!seenPaths.has(key) && parts[0]) {
+            // 直接文件或空文件夹标记
+            if (!seenPaths.has(key)) {
               seenPaths.add(key);
               directItems.push({
                 name: parts[0],
@@ -71,13 +75,14 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
                 lastModified: obj.lastModified,
               });
             }
-          } else if (parts.length === 2 && parts[1] === '' && parts[0]) {
-            // 直接子文件夹（过滤掉空名称的）
-            const folderPath = prefix + parts[0] + '/';
+          } else if (parts.length > 1) {
+            // 子文件夹（路径中有多个部分）
+            const folderName = parts[0];
+            const folderPath = prefix + folderName + '/';
             if (!seenPaths.has(folderPath)) {
               seenPaths.add(folderPath);
               directItems.push({
-                name: parts[0],
+                name: folderName,
                 path: folderPath,
                 isFolder: true,
                 size: 0,
@@ -87,10 +92,11 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
           }
         } else {
           // 根目录
-          const parts = key.split('/');
+          const parts = key.split('/').filter(Boolean);
+          
           if (parts.length === 1) {
-            // 根目录下的直接文件
-            if (!seenPaths.has(key) && parts[0]) {
+            // 根目录下的直接文件或空文件夹标记
+            if (!seenPaths.has(key)) {
               seenPaths.add(key);
               directItems.push({
                 name: parts[0],
@@ -100,13 +106,14 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
                 lastModified: obj.lastModified,
               });
             }
-          } else if (parts.length === 2 && parts[1] === '' && parts[0]) {
-            // 根目录下的直接子文件夹（过滤掉空名称的）
-            const folderPath = parts[0] + '/';
+          } else if (parts.length > 1) {
+            // 根目录下的子文件夹
+            const folderName = parts[0];
+            const folderPath = folderName + '/';
             if (!seenPaths.has(folderPath)) {
               seenPaths.add(folderPath);
               directItems.push({
-                name: parts[0],
+                name: folderName,
                 path: folderPath,
                 isFolder: true,
                 size: 0,
@@ -184,6 +191,11 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
     fileInputRef.current?.click();
   };
 
+  // 处理文件夹上传
+  const handleUploadFolderClick = () => {
+    folderInputRef.current?.click();
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0 || !bucket || !connectionId) return;
@@ -206,6 +218,45 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
     // 清空 input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  // 处理文件夹上传
+  const handleFolderChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !bucket || !connectionId) return;
+
+    const s3Service = new S3Service(dispatch);
+    let uploadedCount = 0;
+    let failedCount = 0;
+    
+    for (const file of Array.from(files)) {
+      // 获取文件的相对路径
+      const relativePath = file.webkitRelativePath || file.name;
+      const key = currentPath + relativePath;
+      
+      try {
+        await s3Service.uploadFile(file, connectionId, bucket.name, key);
+        uploadedCount++;
+      } catch (err) {
+        console.error('Upload failed:', err);
+        failedCount++;
+      }
+    }
+    
+    // 刷新文件列表
+    handleRefresh();
+    
+    // 显示结果
+    if (failedCount > 0) {
+      alert(`上传完成：成功 ${uploadedCount} 个，失败 ${failedCount} 个`);
+    } else {
+      alert(`上传完成：成功上传 ${uploadedCount} 个文件`);
+    }
+    
+    // 清空 input
+    if (folderInputRef.current) {
+      folderInputRef.current.value = '';
     }
   };
 
@@ -338,8 +389,6 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
           <button className="toolbar-btn" onClick={handleNewFolderClick} title="新建文件夹">
             新建文件夹
           </button>
-        </div>
-        <div className="toolbar-right">
           <input
             type="file"
             ref={fileInputRef}
@@ -350,6 +399,20 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
           <button className="toolbar-btn primary" onClick={handleUploadClick} title="上传文件">
             上传文件
           </button>
+          <input
+            type="file"
+            ref={folderInputRef}
+            onChange={handleFolderChange}
+            style={{ display: 'none' }}
+            // @ts-ignore - webkitdirectory 是非标准属性
+            webkitdirectory=""
+            multiple
+          />
+          <button className="toolbar-btn primary" onClick={handleUploadFolderClick} title="上传文件夹">
+            上传文件夹
+          </button>
+        </div>
+        <div className="toolbar-right">
         </div>
       </div>
 

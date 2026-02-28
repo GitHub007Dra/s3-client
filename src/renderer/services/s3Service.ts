@@ -18,11 +18,17 @@ export type ProgressCallback = (progress: number, speed: number, transferred: nu
 export class S3Service {
   private s3ClientManager: S3ClientManager;
   private dispatch: AppDispatch;
-  private abortControllers: Map<string, AbortController> = new Map();
+  // 使用静态变量确保所有实例共享同一个 Map
+  private static abortControllers: Map<string, AbortController> = new Map();
 
   constructor(dispatch: AppDispatch) {
     this.s3ClientManager = S3ClientManager.getInstance();
     this.dispatch = dispatch;
+  }
+
+  // 获取静态 abortControllers
+  private getAbortControllers(): Map<string, AbortController> {
+    return S3Service.abortControllers;
   }
 
   async testConnection(config: ConnectionConfig): Promise<boolean> {
@@ -103,7 +109,7 @@ export class S3Service {
 
     // 创建 AbortController 用于暂停/取消
     const abortController = new AbortController();
-    this.abortControllers.set(taskId, abortController);
+    this.getAbortControllers().set(taskId, abortController);
 
     try {
       // Check if file size exceeds threshold for multipart upload
@@ -129,7 +135,7 @@ export class S3Service {
       }
       throw error;
     } finally {
-      this.abortControllers.delete(taskId);
+      this.getAbortControllers().delete(taskId);
     }
   }
 
@@ -391,7 +397,7 @@ export class S3Service {
 
     // 创建 AbortController 用于暂停/取消
     const abortController = new AbortController();
-    this.abortControllers.set(taskId, abortController);
+    this.getAbortControllers().set(taskId, abortController);
 
     try {
       return await this.downloadWithResume(connectionId, bucket, key, fileName, taskId, abortController);
@@ -410,7 +416,7 @@ export class S3Service {
       }
       throw error;
     } finally {
-      this.abortControllers.delete(taskId);
+      this.getAbortControllers().delete(taskId);
     }
   }
 
@@ -425,12 +431,6 @@ export class S3Service {
     taskId: string,
     abortController: AbortController
   ): Promise<TransferTask> {
-    // 获取预签名 URL（返回的是 string）
-    const presignedUrlString = await this.s3ClientManager.getPresignedUrl(connectionId, bucket, key, {
-      expiresIn: 3600,
-      method: 'GET',
-    });
-
     // 获取文件总大小
     const headObject = await this.s3ClientManager.headObject(connectionId, bucket, key);
     const total = headObject.ContentLength || 0;
@@ -441,95 +441,188 @@ export class S3Service {
       status: 'downloading',
     }));
 
-    const chunkSize = 1024 * 1024; // 1MB chunks
     const chunks: TransferChunk[] = [];
     let transferred = 0;
     const startTime = Date.now();
-
-    // 计算需要下载的块数
+    const chunkSize = 1024 * 1024; // 1MB chunks
     const numChunks = Math.ceil(total / chunkSize);
 
-    // 收集所有下载的数据块
-    const downloadedChunks: Blob[] = [];
+    // 检查浏览器是否支持 File System Access API
+    const supportsFileSystem = 'showSaveFilePicker' in window;
 
-    for (let i = 0; i < numChunks; i++) {
-      // 检查是否被暂停或取消
-      if (abortController.signal.aborted) {
-        throw new Error('Download aborted');
-      }
+    let writable: FileSystemWritableFileStream | null = null;
 
-      const start = i * chunkSize;
-      const end = Math.min(start + chunkSize - 1, total - 1);
-      const chunkNumber = i + 1;
+    try {
+      if (supportsFileSystem) {
+        // 使用 File System Access API - 立即弹出保存对话框
+        const handle = await (window as any).showSaveFilePicker({
+          suggestedName: fileName,
+        });
+        writable = await handle.createWritable();
+      } else {
+        // 不支持 File System Access API，回退到原来的方式
+        // 获取预签名 URL，带上文件名让浏览器直接弹出保存对话框
+        const presignedUrlString = await this.s3ClientManager.getPresignedUrl(connectionId, bucket, key, {
+          expiresIn: 3600,
+          method: 'GET',
+          fileName: fileName,
+        });
 
-      try {
-        // 使用 Range 请求下载部分内容
         const response = await fetch(presignedUrlString, {
-          headers: {
-            Range: `bytes=${start}-${end}`,
-          },
           signal: abortController.signal,
         });
 
-        if (!response.ok && response.status !== 206) {
+        if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
         const blob = await response.blob();
-        downloadedChunks.push(blob);
-        const chunkSizeActual = blob.size;
-
-        transferred += chunkSizeActual;
-        const elapsed = (Date.now() - startTime) / 1000;
-        const speed = elapsed > 0 ? transferred / elapsed : 0;
-        const progress = total > 0 ? (transferred / total) * 100 : 0;
-
-        chunks.push({
-          partNumber: chunkNumber,
-          size: chunkSizeActual,
-          transferred: chunkSizeActual,
-          status: 'completed',
-        });
-
-        this.dispatch(updateTransferTask({
-          id: taskId,
-          progress,
-          speed,
-          transferred,
-          chunks: [...chunks],
-          status: progress === 100 ? 'completed' : 'downloading',
-          updatedAt: new Date(),
-        }));
-      } catch (error) {
-        chunks.push({
-          partNumber: chunkNumber,
-          size: end - start + 1,
-          transferred: 0,
-          status: 'failed',
-        });
         
+        // 创建下载链接并触发下载
+        const downloadUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(downloadUrl);
+
+        console.log(`File downloaded: ${fileName}`);
+        
+        return {
+          id: taskId,
+          type: 'download',
+          fileName,
+          key,
+          bucket,
+          connectionId,
+          status: 'completed',
+          progress: 100,
+          speed: 0,
+          transferred: total,
+          total,
+          chunks: [],
+          resumable: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+      }
+
+      // 使用 File System Access API 分块下载并写入文件
+
+      for (let i = 0; i < numChunks; i++) {
+        // 检查是否被暂停或取消
+        if (abortController.signal.aborted) {
+          const abortError = new Error('Download aborted');
+          abortError.name = 'AbortError';
+          throw abortError;
+        }
+
+        const start = i * chunkSize;
+        const end = Math.min(start + chunkSize - 1, total - 1);
+        const chunkNumber = i + 1;
+
+        // 获取预签名 URL（不带文件名，因为我们要自己处理下载）
+        const presignedUrlString = await this.s3ClientManager.getPresignedUrl(connectionId, bucket, key, {
+          expiresIn: 3600,
+          method: 'GET',
+        });
+
+        try {
+          // 使用 Range 请求下载部分内容
+          const response = await fetch(presignedUrlString, {
+            headers: {
+              Range: `bytes=${start}-${end}`,
+            },
+            signal: abortController.signal,
+          });
+
+          if (!response.ok && response.status !== 206) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          const blob = await response.blob();
+          
+          // 写入文件
+          if (writable) {
+            await writable.write(blob);
+          }
+          
+          const chunkSizeActual = blob.size;
+          transferred += chunkSizeActual;
+          const elapsed = (Date.now() - startTime) / 1000;
+          const speed = elapsed > 0 ? transferred / elapsed : 0;
+          const progress = total > 0 ? (transferred / total) * 100 : 0;
+
+          chunks.push({
+            partNumber: chunkNumber,
+            size: chunkSizeActual,
+            transferred: chunkSizeActual,
+            status: 'completed',
+          });
+
+          this.dispatch(updateTransferTask({
+            id: taskId,
+            progress,
+            speed,
+            transferred,
+            chunks: [...chunks],
+            status: progress === 100 ? 'completed' : 'downloading',
+            updatedAt: new Date(),
+          }));
+        } catch (error) {
+          chunks.push({
+            partNumber: chunkNumber,
+            size: end - start + 1,
+            transferred: 0,
+            status: 'failed',
+          });
+          
+          this.dispatch(updateTransferTask({
+            id: taskId,
+            status: 'failed',
+            error: error instanceof Error ? error.message : 'Download failed',
+          }));
+          throw error;
+        }
+      }
+
+      // 关闭文件写入流
+      if (writable) {
+        await writable.close();
+      }
+      console.log(`File downloaded: ${fileName}`);
+
+    } catch (error: any) {
+      // 清理资源
+      if (writable) {
+        await writable.abort();
+      }
+      
+      if (error.name === 'AbortError') {
         this.dispatch(updateTransferTask({
           id: taskId,
-          status: 'failed',
-          error: error instanceof Error ? error.message : 'Download failed',
+          status: 'cancelled',
         }));
         throw error;
       }
-    }
-
-    // 合并所有数据块并触发浏览器下载
-    if (downloadedChunks.length > 0) {
-      const finalBlob = new Blob(downloadedChunks);
-      const downloadUrl = URL.createObjectURL(finalBlob);
-      const a = document.createElement('a');
-      a.href = downloadUrl;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(downloadUrl);
       
-      console.log(`File downloaded: ${fileName}`);
+      // 如果是用户取消选择文件，不算错误
+      if (error.name === 'AbortError' || (error as any).code === 'ERR_ABORTED') {
+        this.dispatch(updateTransferTask({
+          id: taskId,
+          status: 'cancelled',
+        }));
+        throw error;
+      }
+      
+      this.dispatch(updateTransferTask({
+        id: taskId,
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Download failed',
+      }));
+      throw error;
     }
 
     return {
@@ -555,7 +648,7 @@ export class S3Service {
    * 暂停传输任务
    */
   pauseTransfer(taskId: string): void {
-    const abortController = this.abortControllers.get(taskId);
+    const abortController = this.getAbortControllers().get(taskId);
     if (abortController) {
       abortController.abort();
       this.dispatch(pauseTransferTask(taskId));
@@ -566,7 +659,7 @@ export class S3Service {
    * 取消传输任务
    */
   cancelTransfer(taskId: string): void {
-    const abortController = this.abortControllers.get(taskId);
+    const abortController = this.getAbortControllers().get(taskId);
     if (abortController) {
       abortController.abort();
     }

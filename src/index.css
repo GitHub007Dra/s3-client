@@ -1,5 +1,46 @@
 @import "tailwindcss";
 
+@import "tailwindcss";
+
+/* ============================================
+   主题切换样式覆盖 - 必须放在 Tailwind 导入之后
+   使用最强优先级确保样式生效
+   ============================================ */
+
+/* 暗色模式下的表格样式 - 使用 html[data-theme="dark"] 增强选择器 */
+html[data-theme="dark"] .file-table th {
+  background-color: var(--bg-tertiary) !important;
+  color: var(--text-secondary) !important;
+  border-bottom-color: var(--border-color) !important;
+}
+
+html[data-theme="dark"] .file-table td {
+  color: var(--text-primary) !important;
+  border-bottom-color: var(--border-light) !important;
+}
+
+html[data-theme="dark"] .file-table tbody tr:hover {
+  background-color: var(--bg-hover) !important;
+}
+
+/* 暗色模式下的按钮样式 */
+html[data-theme="dark"] .file-table td.col-actions .action-btn {
+  color: var(--text-secondary) !important;
+}
+
+html[data-theme="dark"] .file-table td.col-actions .action-btn:hover {
+  background-color: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] .file-table td.col-actions .action-btn.delete {
+  color: var(--accent-red) !important;
+}
+
+html[data-theme="dark"] .file-table td.col-actions .action-btn.delete:hover {
+  background-color: rgba(244, 63, 94, 0.2) !important;
+}
+
 /* CSS 变量定义 - 亮色主题 */
 :root {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;

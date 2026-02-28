@@ -392,13 +392,17 @@ export class S3ClientManager {
     };
   }
 
-  async getPresignedUrl(connectionId: string, bucket: string, key: string, options: { expiresIn: number, method: 'GET' | 'PUT' }): Promise<string> {
+  async getPresignedUrl(connectionId: string, bucket: string, key: string, options: { expiresIn: number, method: 'GET' | 'PUT', fileName?: string }): Promise<string> {
     const client = this.getClient(connectionId);
     if (!client) throw new Error('No client found for connection');
 
     const command = new GetObjectCommand({
       Bucket: bucket,
-      Key: key
+      Key: key,
+      // 添加 ResponseContentDisposition 让浏览器直接下载
+      ...(options.fileName && {
+        ResponseContentDisposition: `attachment; filename="${options.fileName}"`,
+      }),
     });
 
     return getSignedUrl(client, command, {
