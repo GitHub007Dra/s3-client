@@ -5,6 +5,7 @@ import type { ConnectionConfig, Bucket } from '../shared/types';
 import { setCurrentConnection } from '../renderer/store/slices/connectionsSlice';
 import { setCurrentBucket, setFiles, setCurrentPath, setBuckets } from '../renderer/store/slices/filesSlice';
 import { S3Service } from '../renderer/services/s3Service';
+import { HardDrive } from 'lucide-react';
 
 interface SidebarProps {
   onManageConnections: () => void;
@@ -132,7 +133,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   onClick={() => handleSelectBucket(bucket)}
                   title={bucket.region || '未知区域'}
                 >
-                  <span className="item-icon">🪣</span>
+                  <HardDrive className="item-icon" size={16} />
                   <span className="item-name">{bucket.name}</span>
                 </li>
               ))}

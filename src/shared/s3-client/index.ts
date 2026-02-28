@@ -1,4 +1,4 @@
-import { S3Client, ListBucketsCommand, CreateBucketCommand, DeleteBucketCommand, ListObjectsCommand, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, CopyObjectCommand, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand } from "@aws-sdk/client-s3";
+import { S3Client, ListBucketsCommand, CreateBucketCommand, DeleteBucketCommand, ListObjectsCommand, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, CopyObjectCommand, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export interface ConnectionConfig {
@@ -370,6 +370,26 @@ export class S3ClientManager {
     });
 
     await client.send(command);
+  }
+
+  async headObject(connectionId: string, bucket: string, key: string): Promise<{ ContentLength: number; ContentType?: string; LastModified?: Date; ETag?: string; metadata?: Record<string, string> }> {
+    const client = this.getClient(connectionId);
+    if (!client) throw new Error('No client found for connection');
+
+    const command = new HeadObjectCommand({
+      Bucket: bucket,
+      Key: key
+    });
+
+    const response = await client.send(command);
+    
+    return {
+      ContentLength: response.ContentLength || 0,
+      ContentType: response.ContentType,
+      LastModified: response.LastModified,
+      ETag: response.ETag,
+      metadata: response.Metadata,
+    };
   }
 
   async getPresignedUrl(connectionId: string, bucket: string, key: string, options: { expiresIn: number, method: 'GET' | 'PUT' }): Promise<string> {

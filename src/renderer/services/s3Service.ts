@@ -1,13 +1,24 @@
 import { S3ClientManager } from '../../shared/s3-client';
-import type { ConnectionConfig, S3Bucket, S3Object, UploadTask, PresignedUrl, UploadChunk, FileItem } from '../../shared/types';
+import type { ConnectionConfig, S3Bucket, S3Object, PresignedUrl, FileItem } from '../../shared/types';
 import type { AppDispatch } from '../store';
-import { addUploadTask, updateUploadTask } from '../store/slices/uploadsSlice';
+import {
+  addTransferTask,
+  updateTransferTask,
+  pauseTransferTask,
+  cancelTransferTask,
+  type TransferTask,
+  type TransferChunk,
+} from '../store/slices/transfersSlice';
 import { setFiles, setLoading as setFilesLoading, setError as setFilesError } from '../store/slices/filesSlice';
 import { setConnections, setCurrentConnection, setLoading as setConnectionsLoading, setError as setConnectionsError } from '../store/slices/connectionsSlice';
+
+// 进度回调类型
+export type ProgressCallback = (progress: number, speed: number, transferred: number) => void;
 
 export class S3Service {
   private s3ClientManager: S3ClientManager;
   private dispatch: AppDispatch;
+  private abortControllers: Map<string, AbortController> = new Map();
 
   constructor(dispatch: AppDispatch) {
     this.s3ClientManager = S3ClientManager.getInstance();
@@ -64,10 +75,15 @@ export class S3Service {
     }
   }
 
-  async uploadFile(file: File, connectionId: string, bucket: string, key: string): Promise<UploadTask> {
+  /**
+   * 上传文件（支持断点续传）
+   */
+  async uploadFile(file: File, connectionId: string, bucket: string, key: string): Promise<TransferTask> {
     const taskId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const task: UploadTask = {
+    const task: TransferTask = {
       id: taskId,
+      type: 'upload',
+      fileName: file.name,
       file,
       key,
       bucket,
@@ -75,148 +91,227 @@ export class S3Service {
       status: 'pending',
       progress: 0,
       speed: 0,
-      uploaded: 0,
+      transferred: 0,
       total: file.size,
       chunks: [],
+      resumable: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
-    this.dispatch(addUploadTask(task));
+    this.dispatch(addTransferTask(task));
+
+    // 创建 AbortController 用于暂停/取消
+    const abortController = new AbortController();
+    this.abortControllers.set(taskId, abortController);
 
     try {
       // Check if file size exceeds threshold for multipart upload
       const threshold = 5 * 1024 * 1024; // 5MB
       if (file.size > threshold) {
-        return await this.uploadWithMultipart(file, connectionId, bucket, key, taskId);
+        return await this.uploadWithMultipart(file, connectionId, bucket, key, taskId, abortController);
       } else {
-        return await this.uploadSinglePart(file, connectionId, bucket, key, taskId);
+        return await this.uploadSinglePart(file, connectionId, bucket, key, taskId, abortController);
       }
-    } catch (error) {
-      this.dispatch(updateUploadTask({
-        id: taskId,
-        status: 'failed',
-      }));
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        // 用户取消或暂停
+        this.dispatch(updateTransferTask({
+          id: taskId,
+          status: 'cancelled',
+        }));
+      } else {
+        this.dispatch(updateTransferTask({
+          id: taskId,
+          status: 'failed',
+          error: error instanceof Error ? error.message : 'Upload failed',
+        }));
+      }
       throw error;
+    } finally {
+      this.abortControllers.delete(taskId);
     }
   }
 
-  private async uploadSinglePart(file: File, connectionId: string, bucket: string, key: string, taskId: string): Promise<UploadTask> {
+  /**
+   * 单部分上传（支持断点续传）
+   */
+  private async uploadSinglePart(
+    file: File,
+    connectionId: string,
+    bucket: string,
+    key: string,
+    taskId: string,
+    abortController: AbortController
+  ): Promise<TransferTask> {
     const chunkSize = 1024 * 1024; // 1MB chunks
-    const chunks: UploadChunk[] = [];
-    let uploaded = 0;
+    const chunks: TransferChunk[] = [];
+    let transferred = 0;
     const total = file.size;
     const startTime = Date.now();
 
+    // 更新状态为上传中
+    this.dispatch(updateTransferTask({
+      id: taskId,
+      status: 'uploading',
+    }));
+
     for (let i = 0; i < file.size; i += chunkSize) {
+      // 检查是否被暂停或取消
+      if (abortController.signal.aborted) {
+        throw new Error('Upload aborted');
+      }
+
       const chunk = file.slice(i, Math.min(i + chunkSize, file.size));
-      const chunkNumber = i / chunkSize + 1;
+      const chunkNumber = Math.floor(i / chunkSize) + 1;
       
       try {
-        // 将 Blob 转换为 Uint8Array，因为 AWS SDK 不支持直接使用 Blob
+        // 将 Blob 转换为 Uint8Array
         const arrayBuffer = await chunk.arrayBuffer();
         const uint8Array = new Uint8Array(arrayBuffer);
         const response = await this.s3ClientManager.putObject(connectionId, bucket, key, uint8Array);
         
-        uploaded += chunk.size;
+        transferred += chunk.size;
         const elapsed = (Date.now() - startTime) / 1000;
-        const speed = uploaded / elapsed;
-        const progress = (uploaded / total) * 100;
+        const speed = elapsed > 0 ? transferred / elapsed : 0;
+        const progress = (transferred / total) * 100;
 
         chunks.push({
           partNumber: chunkNumber,
           etag: response.etag || '',
           size: chunk.size,
-          uploaded: chunk.size,
+          transferred: chunk.size,
           status: 'completed',
         });
 
-        this.dispatch(updateUploadTask({
+        this.dispatch(updateTransferTask({
           id: taskId,
           progress,
           speed,
-          uploaded,
-          chunks,
+          transferred,
+          chunks: [...chunks],
           status: progress === 100 ? 'completed' : 'uploading',
           updatedAt: new Date(),
         }));
       } catch (error) {
-        this.dispatch(updateUploadTask({
+        // 记录失败的块，但继续上传其他块
+        chunks.push({
+          partNumber: chunkNumber,
+          size: chunk.size,
+          transferred: 0,
+          status: 'failed',
+        });
+        
+        this.dispatch(updateTransferTask({
           id: taskId,
           status: 'failed',
           error: error instanceof Error ? error.message : 'Upload failed',
-        } as any));
+        }));
         throw error;
       }
     }
 
     return {
       id: taskId,
-      file: file,
-      key: key,
-      bucket: bucket,
-      connectionId: connectionId,
+      type: 'upload',
+      fileName: file.name,
+      file,
+      key,
+      bucket,
+      connectionId,
       status: 'completed',
       progress: 100,
       speed: 0,
-      uploaded: total,
+      transferred: total,
       total: total,
-      chunks: chunks,
+      chunks,
+      resumable: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
   }
 
-  private async uploadWithMultipart(file: File, connectionId: string, bucket: string, key: string, taskId: string): Promise<UploadTask> {
+  /**
+   * 分片上传（支持断点续传）
+   */
+  private async uploadWithMultipart(
+    file: File,
+    connectionId: string,
+    bucket: string,
+    key: string,
+    taskId: string,
+    abortController: AbortController
+  ): Promise<TransferTask> {
     const chunkSize = 5 * 1024 * 1024; // 5MB chunks
-    const chunks: UploadChunk[] = [];
-    let uploaded = 0;
+    const chunks: TransferChunk[] = [];
+    let transferred = 0;
     const total = file.size;
     const startTime = Date.now();
     let uploadId: string = '';
 
     try {
+      // 更新状态为上传中
+      this.dispatch(updateTransferTask({
+        id: taskId,
+        status: 'uploading',
+      }));
+
       // Step 1: Initiate multipart upload
       uploadId = await this.s3ClientManager.initiateMultipartUpload(connectionId, bucket, key);
 
       // Step 2: Upload parts
       for (let i = 0; i < file.size; i += chunkSize) {
+        // 检查是否被暂停或取消
+        if (abortController.signal.aborted) {
+          throw new Error('Upload aborted');
+        }
+
         const chunk = file.slice(i, Math.min(i + chunkSize, file.size));
-        const chunkNumber = i / chunkSize + 1;
+        const chunkNumber = Math.floor(i / chunkSize) + 1;
         
         try {
-          // 将 Blob 转换为 Uint8Array，因为 AWS SDK 不支持直接使用 Blob
+          // 将 Blob 转换为 Uint8Array
           const arrayBuffer = await chunk.arrayBuffer();
           const uint8Array = new Uint8Array(arrayBuffer);
           const response = await this.s3ClientManager.uploadPart(connectionId, uploadId, bucket, key, chunkNumber, uint8Array);
           
-          uploaded += chunk.size;
+          transferred += chunk.size;
           const elapsed = (Date.now() - startTime) / 1000;
-          const speed = uploaded / elapsed;
-          const progress = (uploaded / total) * 100;
+          const speed = elapsed > 0 ? transferred / elapsed : 0;
+          const progress = (transferred / total) * 100;
 
           chunks.push({
             partNumber: chunkNumber,
             etag: response.ETag || '',
             size: chunk.size,
-            uploaded: chunk.size,
+            transferred: chunk.size,
             status: 'completed',
           });
 
-          this.dispatch(updateUploadTask({
+          this.dispatch(updateTransferTask({
             id: taskId,
             progress,
             speed,
-            uploaded,
-            chunks,
+            transferred,
+            chunks: [...chunks],
+            uploadId,
             status: progress === 100 ? 'completed' : 'uploading',
             updatedAt: new Date(),
           }));
         } catch (error) {
-          this.dispatch(updateUploadTask({
+          // 记录失败的块
+          chunks.push({
+            partNumber: chunkNumber,
+            size: chunk.size,
+            transferred: 0,
+            status: 'failed',
+          });
+          
+          this.dispatch(updateTransferTask({
             id: taskId,
             status: 'failed',
-          } as any));
+            error: error instanceof Error ? error.message : 'Upload failed',
+          }));
           throw error;
         }
       }
@@ -229,26 +324,258 @@ export class S3Service {
 
       return {
         id: taskId,
-        file: file,
-        key: key,
-        bucket: bucket,
-        connectionId: connectionId,
+        type: 'upload',
+        fileName: file.name,
+        file,
+        key,
+        bucket,
+        connectionId,
         status: 'completed',
         progress: 100,
         speed: 0,
-        uploaded: total,
+        transferred: total,
         total: total,
-        chunks: chunks,
+        chunks,
+        resumable: true,
+        uploadId,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-    } catch (error) {
+    } catch (error: any) {
       // Step 4: Abort multipart upload on failure
-      await this.s3ClientManager.abortMultipartUpload(connectionId, uploadId, bucket, key);
+      if (uploadId && error.name !== 'AbortError') {
+        try {
+          await this.s3ClientManager.abortMultipartUpload(connectionId, uploadId, bucket, key);
+        } catch (abortError) {
+          console.error('Failed to abort multipart upload:', abortError);
+        }
+      }
       throw error;
     }
   }
 
+  /**
+   * 下载文件（支持断点续传）
+   */
+  async downloadFile(
+    connectionId: string,
+    bucket: string,
+    key: string,
+    fileName: string
+  ): Promise<TransferTask> {
+    const taskId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // 先获取文件大小
+    const objectInfo = await this.s3ClientManager.headObject(connectionId, bucket, key);
+    const totalSize = objectInfo.ContentLength || 0;
+
+    const task: TransferTask = {
+      id: taskId,
+      type: 'download',
+      fileName,
+      key,
+      bucket,
+      connectionId,
+      status: 'pending',
+      progress: 0,
+      speed: 0,
+      transferred: 0,
+      total: totalSize,
+      chunks: [],
+      resumable: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    this.dispatch(addTransferTask(task));
+
+    // 创建 AbortController 用于暂停/取消
+    const abortController = new AbortController();
+    this.abortControllers.set(taskId, abortController);
+
+    try {
+      return await this.downloadWithResume(connectionId, bucket, key, fileName, taskId, abortController);
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        this.dispatch(updateTransferTask({
+          id: taskId,
+          status: 'cancelled',
+        }));
+      } else {
+        this.dispatch(updateTransferTask({
+          id: taskId,
+          status: 'failed',
+          error: error instanceof Error ? error.message : 'Download failed',
+        }));
+      }
+      throw error;
+    } finally {
+      this.abortControllers.delete(taskId);
+    }
+  }
+
+  /**
+   * 下载文件（支持断点续传和进度回调）
+   */
+  private async downloadWithResume(
+    connectionId: string,
+    bucket: string,
+    key: string,
+    fileName: string,
+    taskId: string,
+    abortController: AbortController
+  ): Promise<TransferTask> {
+    // 获取预签名 URL（返回的是 string）
+    const presignedUrlString = await this.s3ClientManager.getPresignedUrl(connectionId, bucket, key, {
+      expiresIn: 3600,
+      method: 'GET',
+    });
+
+    // 获取文件总大小
+    const headObject = await this.s3ClientManager.headObject(connectionId, bucket, key);
+    const total = headObject.ContentLength || 0;
+
+    // 更新状态为下载中
+    this.dispatch(updateTransferTask({
+      id: taskId,
+      status: 'downloading',
+    }));
+
+    const chunkSize = 1024 * 1024; // 1MB chunks
+    const chunks: TransferChunk[] = [];
+    let transferred = 0;
+    const startTime = Date.now();
+
+    // 计算需要下载的块数
+    const numChunks = Math.ceil(total / chunkSize);
+
+    // 收集所有下载的数据块
+    const downloadedChunks: Blob[] = [];
+
+    for (let i = 0; i < numChunks; i++) {
+      // 检查是否被暂停或取消
+      if (abortController.signal.aborted) {
+        throw new Error('Download aborted');
+      }
+
+      const start = i * chunkSize;
+      const end = Math.min(start + chunkSize - 1, total - 1);
+      const chunkNumber = i + 1;
+
+      try {
+        // 使用 Range 请求下载部分内容
+        const response = await fetch(presignedUrlString, {
+          headers: {
+            Range: `bytes=${start}-${end}`,
+          },
+          signal: abortController.signal,
+        });
+
+        if (!response.ok && response.status !== 206) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const blob = await response.blob();
+        downloadedChunks.push(blob);
+        const chunkSizeActual = blob.size;
+
+        transferred += chunkSizeActual;
+        const elapsed = (Date.now() - startTime) / 1000;
+        const speed = elapsed > 0 ? transferred / elapsed : 0;
+        const progress = total > 0 ? (transferred / total) * 100 : 0;
+
+        chunks.push({
+          partNumber: chunkNumber,
+          size: chunkSizeActual,
+          transferred: chunkSizeActual,
+          status: 'completed',
+        });
+
+        this.dispatch(updateTransferTask({
+          id: taskId,
+          progress,
+          speed,
+          transferred,
+          chunks: [...chunks],
+          status: progress === 100 ? 'completed' : 'downloading',
+          updatedAt: new Date(),
+        }));
+      } catch (error) {
+        chunks.push({
+          partNumber: chunkNumber,
+          size: end - start + 1,
+          transferred: 0,
+          status: 'failed',
+        });
+        
+        this.dispatch(updateTransferTask({
+          id: taskId,
+          status: 'failed',
+          error: error instanceof Error ? error.message : 'Download failed',
+        }));
+        throw error;
+      }
+    }
+
+    // 合并所有数据块并触发浏览器下载
+    if (downloadedChunks.length > 0) {
+      const finalBlob = new Blob(downloadedChunks);
+      const downloadUrl = URL.createObjectURL(finalBlob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(downloadUrl);
+      
+      console.log(`File downloaded: ${fileName}`);
+    }
+
+    return {
+      id: taskId,
+      type: 'download',
+      fileName,
+      key,
+      bucket,
+      connectionId,
+      status: 'completed',
+      progress: 100,
+      speed: 0,
+      transferred: total,
+      total,
+      chunks,
+      resumable: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+  }
+
+  /**
+   * 暂停传输任务
+   */
+  pauseTransfer(taskId: string): void {
+    const abortController = this.abortControllers.get(taskId);
+    if (abortController) {
+      abortController.abort();
+      this.dispatch(pauseTransferTask(taskId));
+    }
+  }
+
+  /**
+   * 取消传输任务
+   */
+  cancelTransfer(taskId: string): void {
+    const abortController = this.abortControllers.get(taskId);
+    if (abortController) {
+      abortController.abort();
+    }
+    this.dispatch(cancelTransferTask(taskId));
+  }
+
+  /**
+   * 获取预签名 URL
+   */
   async getPresignedUrl(connectionId: string, bucket: string, key: string, expiresIn: number): Promise<PresignedUrl> {
     try {
       const url = await this.s3ClientManager.getPresignedUrl(connectionId, bucket, key, {

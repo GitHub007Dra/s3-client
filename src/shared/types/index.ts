@@ -119,6 +119,59 @@ export interface UploadsState {
   failedTasks: string[];
 }
 
+// 传输任务类型
+export type TransferType = 'upload' | 'download';
+export type TransferStatus =
+  | 'pending'
+  | 'uploading'
+  | 'downloading'
+  | 'paused'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+// 传输块信息
+export interface TransferChunk {
+  partNumber: number;
+  etag?: string;
+  size: number;
+  transferred: number;
+  status: 'pending' | 'transferring' | 'completed' | 'failed';
+}
+
+// 传输任务接口
+export interface TransferTask {
+  id: string;
+  type: TransferType;
+  fileName: string;
+  file?: File;
+  key: string;
+  bucket: string;
+  connectionId: string;
+  status: TransferStatus;
+  progress: number;
+  speed: number;
+  transferred: number;
+  total: number;
+  chunks: TransferChunk[];
+  resumable: boolean;
+  uploadId?: string;
+  localPath?: string;
+  resumedFrom?: number;
+  error?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// 传输状态接口
+export interface TransfersState {
+  tasks: Record<string, TransferTask>;
+  activeTasks: string[];
+  completedTasks: string[];
+  failedTasks: string[];
+  pausedTasks: string[];
+}
+
 export interface UIState {
   viewMode: 'grid' | 'list';
   selectedItems: string[];

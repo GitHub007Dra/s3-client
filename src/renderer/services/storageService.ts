@@ -1,6 +1,8 @@
 import type { ConnectionConfig } from '../../shared/types';
+import type { ThemeMode } from '../store/slices/themeSlice';
 
 const STORAGE_KEY = 's3-client-connections';
+const THEME_KEY = 's3-client-theme';
 
 export class StorageService {
   static saveConnections(connections: ConnectionConfig[]): void {
@@ -44,4 +46,24 @@ export class StorageService {
       console.error('Failed to clear connections:', error);
     }
   }
+
+  // 主题相关方法
+  static saveTheme(theme: ThemeMode): void {
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch (error) {
+      console.error('Failed to save theme:', error);
+    }
+  }
+
+  static loadTheme(): ThemeMode {
+    try {
+      const theme = localStorage.getItem(THEME_KEY);
+      return (theme as ThemeMode) || 'light';
+    } catch (error) {
+      console.error('Failed to load theme:', error);
+      return 'light';
+    }
+  }
+
 }

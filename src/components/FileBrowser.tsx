@@ -4,6 +4,7 @@ import type { RootState, AppDispatch } from '../renderer/store';
 import type { FileItem, Bucket } from '../shared/types';
 import { setFiles, setCurrentPath, setBreadcrumb, setLoading, setError } from '../renderer/store/slices/filesSlice';
 import { S3Service } from '../renderer/services/s3Service';
+import { Folder, FileText, Download, Share2, Trash2 } from 'lucide-react';
 
 interface FileBrowserProps {
   bucket: Bucket | null;
@@ -238,18 +239,14 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
     const s3Service = new S3Service(dispatch);
     
     try {
-      const presignedUrl = await s3Service.getPresignedUrl(connectionId, bucket.name, item.path, 3600);
-      
-      // 创建临时链接下载
-      const link = document.createElement('a');
-      link.href = presignedUrl.url;
-      link.download = item.name;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // 使用带传输任务的方式下载，会在 TransferProgress 面板显示
+      await s3Service.downloadFile(connectionId, bucket.name, item.path, item.name);
     } catch (err) {
       console.error('Download failed:', err);
-      alert(`下载失败: ${err instanceof Error ? err.message : '未知错误'}`);
+      // 用户取消不提示错误
+      if (err instanceof Error && err.name !== 'AbortError') {
+        alert(`下载失败: ${err instanceof Error ? err.message : '未知错误'}`);
+      }
     }
   };
 
@@ -409,45 +406,51 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
                   onDoubleClick={() => handleItemDoubleClick(item)}
                 >
                   <td className="col-name">
-                    <span className="file-icon">{item.isFolder ? '📁' : '📄'}</span>
-                    <span className="file-name">{item.name || '(未命名)'}</span>
+                    <div className="file-item-wrapper">
+                      {item.isFolder ? (
+                        <Folder className="file-icon folder-icon" size={14} />
+                      ) : (
+                        <FileText className="file-icon file-type-icon" size={14} />
+                      )}
+                      <span className="file-name">{item.name || '(未命名)'}</span>
+                    </div>
                   </td>
                   <td className="col-size">{formatSize(item.size || 0)}</td>
                   <td className="col-date">{formatDate(item.lastModified || new Date())}</td>
                   <td className="col-actions">
                     {!item.isFolder && (
-                      <button 
-                        className="action-btn" 
+                      <button
+                        className="action-btn icon-only"
                         title="下载"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDownload(item);
                         }}
                       >
-                        下载
+                        <Download size={14} />
                       </button>
                     )}
                     {!item.isFolder && (
-                      <button 
-                        className="action-btn" 
+                      <button
+                        className="action-btn icon-only"
                         title="分享"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleShare(item);
                         }}
                       >
-                        分享
+                        <Share2 size={14} />
                       </button>
                     )}
-                    <button 
-                      className="action-btn delete" 
+                    <button
+                      className="action-btn delete icon-only"
                       title="删除"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDelete(item);
                       }}
                     >
-                      删除
+                      <Trash2 size={14} />
                     </button>
                   </td>
                 </tr>
@@ -503,22 +506,36 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
       {/* 分享链接弹窗 */}
       {showShareModal && shareUrl && (
         <div className="modal-overlay" onClick={() => setShowShareModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>分享链接</h3>
-            <p className="share-info">链接有效期：24小时</p>
-            <div className="share-url-container">
-              <input
-                type="text"
-                value={shareUrl}
-                readOnly
-                className="share-url-input"
-              />
-              <button onClick={copyShareUrl} className="copy-btn">
-                复制
-              </button>
+          <div className="modal-content share-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">🔗 分享链接</h3>
+              <button className="modal-close-btn" onClick={() => setShowShareModal(false)}>×</button>
             </div>
-            <div className="modal-actions">
-              <button onClick={() => setShowShareModal(false)}>关闭</button>
+            <div className="modal-body">
+              <div className="share-icon-large">🔗</div>
+              <p className="share-description">
+                链接已生成，有效期 <strong>24小时</strong>
+              </p>
+              <div className="share-url-wrapper">
+                <label className="share-label">分享链接</label>
+                <div className="share-url-container">
+                  <input
+                    type="text"
+                    value={shareUrl}
+                    readOnly
+                    className="share-url-input"
+                  />
+                  <button onClick={copyShareUrl} className="copy-btn">
+                    📋 复制
+                  </button>
+                </div>
+              </div>
+              <p className="share-hint">
+                💡 提示：复制链接后发送给他人，对方可在24小时内访问该文件
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowShareModal(false)}>关闭</button>
             </div>
           </div>
         </div>
