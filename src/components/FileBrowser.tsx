@@ -561,11 +561,18 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
                   <td className="col-actions">
                     {!item.isFolder && (
                       <button
-                        className="action-btn icon-only download-btn"
+                        className="action-btn icon-only"
                         title="下载"
+                        style={{ padding: '4px 6px', borderRadius: '4px' }}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDownload(item);
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLElement).style.setProperty('background-color', '#e0e0e0', 'important');
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = '';
                         }}
                       >
                         <Download size={14} />
@@ -573,11 +580,18 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
                     )}
                     {!item.isFolder && (
                       <button
-                        className="action-btn icon-only share-btn"
+                        className="action-btn icon-only"
                         title="分享"
+                        style={{ padding: '4px 6px', borderRadius: '4px' }}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleShare(item);
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLElement).style.setProperty('background-color', '#e0e0e0', 'important');
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = '';
                         }}
                       >
                         <Share2 size={14} />
