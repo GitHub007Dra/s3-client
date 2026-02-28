@@ -1,6 +1,9 @@
-import { useState } from 'react';
-import { Provider } from 'react-redux';
+import { useState, useEffect } from 'react';
+import { Provider, useDispatch } from 'react-redux';
 import { store } from './renderer/store';
+import type { AppDispatch } from './renderer/store';
+import { addTransferTask } from './renderer/store/slices/transfersSlice';
+import { StorageService } from './renderer/services/storageService';
 import Sidebar from './components/Sidebar';
 import FileBrowser from './components/FileBrowser';
 import ConnectionModal from './components/ConnectionModal';
@@ -10,9 +13,25 @@ import './App.css';
 
 // 内部组件
 function AppContent() {
+  const dispatch = useDispatch<AppDispatch>();
   const [currentBucket, setCurrentBucket] = useState<Bucket | null>(null);
   const [currentConnectionId, setCurrentConnectionId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // 应用启动时恢复未完成的传输任务
+  useEffect(() => {
+    const loadUnfinishedTransfers = () => {
+      const savedTasks = StorageService.loadTransfers();
+      if (savedTasks.length > 0) {
+        savedTasks.forEach(task => {
+          dispatch(addTransferTask(task));
+        });
+        console.log(`Restored ${savedTasks.length} unfinished transfer tasks`);
+      }
+    };
+
+    loadUnfinishedTransfers();
+  }, [dispatch]);
 
   const handleConnectionSelect = (connectionId: string) => {
     setCurrentConnectionId(connectionId);

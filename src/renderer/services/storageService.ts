@@ -1,8 +1,10 @@
 import type { ConnectionConfig } from '../../shared/types';
 import type { ThemeMode } from '../store/slices/themeSlice';
+import type { TransferTask } from '../store/slices/transfersSlice';
 
 const STORAGE_KEY = 's3-client-connections';
 const THEME_KEY = 's3-client-theme';
+const TRANSFERS_KEY = 's3-client-transfers';
 
 export class StorageService {
   static saveConnections(connections: ConnectionConfig[]): void {
@@ -63,6 +65,94 @@ export class StorageService {
     } catch (error) {
       console.error('Failed to load theme:', error);
       return 'light';
+    }
+  }
+
+  // 传输任务持久化方法
+  static saveTransfers(tasks: Record<string, TransferTask>): void {
+    try {
+      // 只保存可以恢复的任务（暂停或失败的）
+      const resumableTasks: Record<string, TransferTask> = {};
+      
+      Object.values(tasks).forEach(task => {
+        // 只保存支持断点续传且状态为暂停或失败的任务
+        if (task.resumable && (task.status === 'paused' || task.status === 'failed')) {
+          // 创建可序列化的任务副本
+          resumableTasks[task.id] = {
+            ...task,
+            // 不保存 File 对象，因为它无法序列化
+            file: undefined,
+            createdAt: new Date(task.createdAt),
+            updatedAt: new Date(task.updatedAt),
+          };
+        }
+      });
+
+      localStorage.setItem(TRANSFERS_KEY, JSON.stringify(resumableTasks));
+    } catch (error) {
+      console.error('Failed to save transfers:', error);
+    }
+  }
+
+  static loadTransfers(): TransferTask[] {
+    try {
+      const data = localStorage.getItem(TRANSFERS_KEY);
+      if (!data) return [];
+
+      const tasks = JSON.parse(data);
+      return Object.values(tasks).map((task: any) => ({
+        ...task,
+        createdAt: new Date(task.createdAt),
+        updatedAt: new Date(task.updatedAt),
+        // 恢复时状态设为暂停，等待用户手动恢复
+        status: 'paused' as const,
+      }));
+    } catch (error) {
+      console.error('Failed to load transfers:', error);
+      return [];
+    }
+  }
+
+  static clearTransfers(): void {
+    try {
+      localStorage.removeItem(TRANSFERS_KEY);
+    } catch (error) {
+      console.error('Failed to clear transfers:', error);
+    }
+  }
+
+  // 保存单个传输任务
+  static saveTransferTask(task: TransferTask): void {
+    try {
+      const existingData = localStorage.getItem(TRANSFERS_KEY);
+      const tasks: Record<string, TransferTask> = existingData ? JSON.parse(existingData) : {};
+      
+      // 只保存支持断点续传的任务
+      if (task.resumable) {
+        tasks[task.id] = {
+          ...task,
+          file: undefined,
+          createdAt: new Date(task.createdAt),
+          updatedAt: new Date(task.updatedAt),
+        };
+        localStorage.setItem(TRANSFERS_KEY, JSON.stringify(tasks));
+      }
+    } catch (error) {
+      console.error('Failed to save transfer task:', error);
+    }
+  }
+
+  // 删除单个传输任务
+  static removeTransferTask(taskId: string): void {
+    try {
+      const existingData = localStorage.getItem(TRANSFERS_KEY);
+      if (!existingData) return;
+      
+      const tasks: Record<string, TransferTask> = JSON.parse(existingData);
+      delete tasks[taskId];
+      localStorage.setItem(TRANSFERS_KEY, JSON.stringify(tasks));
+    } catch (error) {
+      console.error('Failed to remove transfer task:', error);
     }
   }
 

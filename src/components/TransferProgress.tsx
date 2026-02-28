@@ -3,7 +3,6 @@ import { useSelector, useDispatch } from 'react-redux';
 import type { RootState, AppDispatch } from '../renderer/store';
 import { S3Service } from '../renderer/services/s3Service';
 import {
-  resumeTransferTask,
   removeTransferTask,
   clearCompletedTransfers,
   type TransferTask,
@@ -252,7 +251,29 @@ const TransferProgress: React.FC = () => {
     s3Service.pauseTransfer(id);
   }, [dispatch]);
   
-  const handleResume = useCallback((id: string) => dispatch(resumeTransferTask(id)), [dispatch]);
+  const handleResume = useCallback(async (id: string) => {
+    const task = tasks[id];
+    if (!task) return;
+    
+    // 如果是上传任务，需要用户选择文件
+    if (task.type === 'upload' && !task.file) {
+      // 创建一个隐藏的文件输入，让用户选择文件
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.onchange = async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (file) {
+          const s3Service = new S3Service(dispatch);
+          await s3Service.resumeTransfer(task, file);
+        }
+      };
+      input.click();
+    } else {
+      // 下载任务或已有文件的上传任务
+      const s3Service = new S3Service(dispatch);
+      await s3Service.resumeTransfer(task);
+    }
+  }, [dispatch, tasks]);
   
   const handleCancel = useCallback((id: string) => {
     const s3Service = new S3Service(dispatch);
