@@ -284,11 +284,8 @@ const TransferProgress: React.FC = () => {
             {hasActiveTasks ? (
               <>
                 <div className="indicator-icon active">
-                  {stats.uploading > 0 ? (
-                    <Upload size={16} />
-                  ) : stats.downloading > 0 ? (
-                    <Download size={16} />
-                  ) : null}
+                  {stats.uploading > 0 && <Upload size={16} />}
+                  {stats.downloading > 0 && stats.uploading === 0 && <Download size={16} />}
                 </div>
                 <span className="indicator-count">{activeTasks.length}</span>
                 <span className="indicator-text">传输中</span>

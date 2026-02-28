@@ -822,6 +822,17 @@ td.col-actions .action-btn-wrapper {
   background-color: rgba(244, 63, 94, 0.1) !important;
 }
 
+.file-table td.col-actions .action-btn.download-btn,
+.file-table td.col-actions .action-btn.share-btn {
+  color: var(--text-secondary) !important;
+}
+
+.file-table td.col-actions .action-btn.download-btn:hover,
+.file-table td.col-actions .action-btn.share-btn:hover {
+  background-color: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+}
+
 /* 暗色模式下的按钮样式 */
 [data-theme="dark"] .file-table td.col-actions .action-btn {
   color: var(--text-secondary) !important;
