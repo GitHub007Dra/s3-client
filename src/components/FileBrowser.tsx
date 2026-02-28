@@ -561,18 +561,11 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
                   <td className="col-actions">
                     {!item.isFolder && (
                       <button
-                        className="action-btn icon-only"
+                        className="action-btn icon-only download-btn"
                         title="下载"
-                        style={{ padding: '4px 6px', borderRadius: '4px' }}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDownload(item);
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = 'var(--bg-hover)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = '';
                         }}
                       >
                         <Download size={14} />
@@ -580,18 +573,11 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
                     )}
                     {!item.isFolder && (
                       <button
-                        className="action-btn icon-only"
+                        className="action-btn icon-only share-btn"
                         title="分享"
-                        style={{ padding: '4px 6px', borderRadius: '4px' }}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleShare(item);
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = 'var(--bg-hover)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = '';
                         }}
                       >
                         <Share2 size={14} />
