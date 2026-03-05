@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>折叠式存储桶布局 Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #fff;
+            height: 100vh;
+            display: flex;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            width: 280px;
+            background: #16213e;
+            border-right: 1px solid #0f3460;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            gap: 12px;
+            height: 100vh;
+        }
+
+        /* 连接树区域 */
+        .connections-section {
+            flex: 1;
+            min-height: 100px;
+            overflow-y: auto;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding: 0 4px;
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #a0a0a0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* 树形项 */
+        .tree-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-size: 13px;
+            margin-bottom: 2px;
+        }
+
+        .tree-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .tree-item.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+        }
+
+        .tree-item .icon {
+            width: 16px;
+            height: 16px;
+        }
+
+        .tree-item.folder {
+            color: #f59e0b;
+        }
+
+        .tree-item.folder.active {
+            color: #fff;
+        }
+
+        .tree-children {
+            padding-left: 20px;
+            border-left: 1px dashed #0f3460;
+            margin-left: 12px;
+        }
+
+        /* 存储桶折叠区域 */
+        .buckets-section {
+            border-top: 1px solid #0f3460;
+            padding-top: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .buckets-section.collapsed {
+            flex: 0 0 auto;
+        }
+
+        .buckets-section.expanded {
+            flex: 1;
+            min-height: 200px;
+            max-height: 50%;
+        }
+
+        .buckets-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            padding: 8px 4px;
+            border-radius: 6px;
+            transition: background 0.15s ease;
+        }
+
+        .buckets-header:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .buckets-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #a0a0a0;
+        }
+
+        .chevron {
+            width: 16px;
+            height: 16px;
+            transition: transform 0.2s ease;
+        }
+
+        .buckets-section.expanded .chevron {
+            transform: rotate(180deg);
+        }
+
+        .bucket-count {
+            font-size: 11px;
+            color: #667eea;
+            background: rgba(102, 126, 234, 0.2);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        /* 存储桶列表 */
+        .buckets-list {
+            overflow-y: auto;
+            max-height: 0;
+            transition: max-height 0.3s ease;
+        }
+
+        .buckets-section.expanded .buckets-list {
+            max-height: 300px;
+            margin-top: 8px;
+        }
+
+        .bucket-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #ccc;
+            margin-bottom: 2px;
+        }
+
+        .bucket-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .bucket-item.active {
+            background: rgba(102, 126, 234, 0.3);
+            color: #fff;
+        }
+
+        /* 折叠时的提示 */
+        .buckets-preview {
+            display: none;
+            font-size: 11px;
+            color: #667eea;
+            padding: 8px 12px;
+        }
+
+        .buckets-section.collapsed .buckets-preview {
+            display: block;
+        }
+
+        /* 提示信息 */
+        .info-box {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(102, 126, 234, 0.9);
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            max-width: 300px;
+            line-height: 1.5;
+        }
+
+        /* 主内容区 */
+        .main-content {
+            flex: 1;
+            padding: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .placeholder {
+            text-align: center;
+            color: #666;
+        }
+
+        .placeholder h2 {
+            margin-bottom: 16px;
+            color: #999;
+        }
+
+        .placeholder p {
+            margin: 8px 0;
+        }
+
+        .highlight {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        /* 折叠提示条 */
+        .collapsed-hint {
+            display: none;
+            padding: 12px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 6px;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        .buckets-section.collapsed .collapsed-hint {
+            display: block;
+        }
+
+        .collapsed-hint-text {
+            font-size: 12px;
+            color: #667eea;
+        }
+
+        .collapsed-hint-count {
+            font-size: 18px;
+            font-weight: 700;
+            color: #fff;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <!-- 连接树 -->
+        <div class="connections-section">
+            <div class="section-header">
+                <div class="section-title">
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"></path>
+                    </svg>
+                    我的连接 (12)
+                </div>
+            </div>
+            
+            <!-- 生产环境目录 -->
+            <div class="tree-item folder" onclick="toggleFolder(this)">
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                </svg>
+                📁 生产环境
+            </div>
+            <div class="tree-children">
+                <div class="tree-item" onclick="selectConnection(this, '阿里云 OSS-华北1', 12)">
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
+                    </svg>
+                    阿里云 OSS-华北1
+                </div>
+                <div class="tree-item" onclick="selectConnection(this, '阿里云 OSS-华南1', 8)">
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
+                    </svg>
+                    阿里云 OSS-华南1
+                </div>
+                <div class="tree-item" onclick="selectConnection(this, 'AWS S3-东京', 15)">
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
+                    </svg>
+                    AWS S3-东京
+                </div>
+            </div>
+
+            <!-- 测试环境目录 -->
+            <div class="tree-item folder" onclick="toggleFolder(this)">
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                </svg>
+                📁 测试环境
+            </div>
+            <div class="tree-children">
+                <div class="tree-item" onclick="selectConnection(this, '腾讯云 COS', 3)">
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
+                    </svg>
+                    腾讯云 COS
+                </div>
+                <div class="tree-item" onclick="selectConnection(this, '本地 MinIO', 5)">
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
+                    </svg>
+                    本地 MinIO
+                </div>
+            </div>
+
+            <!-- 其他连接 -->
+            <div class="tree-item" onclick="selectConnection(this, '华为云 OBS', 20)">
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
+                </svg>
+                华为云 OBS
+            </div>
+            <div class="tree-item" onclick="selectConnection(this, '百度云 BOS', 2)">
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
+                </svg>
+                百度云 BOS
+            </div>
+            <div class="tree-item active" onclick="selectConnection(this, '七牛云 Kodo', 6)">
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
+                </svg>
+                七牛云 Kodo (当前)
+            </div>
+            <div class="tree-item" onclick="selectConnection(this, 'UCloud US3', 1)">
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
+                </svg>
+                UCloud US3
+            </div>
+            <div class="tree-item" onclick="selectConnection(this, 'AWS S3-弗吉尼亚', 18)">
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
+                </svg>
+                AWS S3-弗吉尼亚
+            </div>
+            <div class="tree-item" onclick="selectConnection(this, 'Cloudflare R2', 4)">
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
+                </svg>
+                Cloudflare R2
+            </div>
+        </div>
+
+        <!-- 存储桶折叠区域 -->
+        <div class="buckets-section expanded" id="bucketsSection">
+            <div class="buckets-header" onclick="toggleBuckets()">
+                <div class="buckets-title">
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                    </svg>
+                    <span id="bucketsTitle">存储桶</span>
+                    <span class="bucket-count" id="bucketCount">6</span>
+                </div>
+                <svg class="chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </div>
+            
+            <div class="collapsed-hint">
+                <div class="collapsed-hint-text">已折叠 - 该连接有</div>
+                <div class="collapsed-hint-count" id="collapsedCount">6</div>
+                <div class="collapsed-hint-text">个存储桶</div>
+            </div>
+            
+            <div class="buckets-list" id="bucketsList">
+                <!-- 动态生成的桶列表 -->
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="placeholder">
+            <h2>方案4：折叠式存储桶</h2>
+            <p>当前选中: <span class="highlight" id="currentConnection">七牛云 Kodo</span></p>
+            <p>存储桶数量: <span class="highlight" id="currentBucketCount">6</span></p>
+            <br>
+            <p style="color: #888;">点击左侧不同的连接，观察存储桶联动变化</p>
+            <p style="color: #888;">点击 "存储桶" 标题可以折叠/展开桶列表</p>
+            <br>
+            <div style="text-align: left; display: inline-block; color: #666; font-size: 13px; line-height: 2;">
+                <p>💡 <strong>试试点击这些连接看效果：</strong></p>
+                <p>• 华为云 OBS (20个桶) - 桶最多的连接</p>
+                <p>• UCloud US3 (1个桶) - 桶最少的连接</p>
+                <p>• AWS S3-弗吉尼亚 (18个桶)</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 存储桶名称生成器
+        const bucketPrefixes = ['prod', 'dev', 'test', 'backup', 'data', 'app', 'web', 'media', 'log', 'archive', 'user', 'system', 'cache', 'image', 'video', 'doc', 'assets', 'static', 'upload', 'config'];
+        
+        function generateBuckets(count) {
+            const buckets = [];
+            for (let i = 0; i < count; i++) {
+                const prefix = bucketPrefixes[i % bucketPrefixes.length];
+                buckets.push(`${prefix}-bucket-${String(i + 1).padStart(2, '0')}`);
+            }
+            return buckets;
+        }
+
+        // 当前状态
+        let currentConnection = '七牛云 Kodo';
+        let currentBucketCount = 6;
+        let isExpanded = true;
+
+        // 初始化桶列表
+        function initBuckets() {
+            renderBuckets(currentBucketCount);
+        }
+
+        // 渲染桶列表
+        function renderBuckets(count) {
+            const bucketsList = document.getElementById('bucketsList');
+            const buckets = generateBuckets(count);
+            
+            bucketsList.innerHTML = buckets.map((bucket, index) => `
+                <div class="bucket-item ${index === 0 ? 'active' : ''}" onclick="selectBucket(this)">
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 14px; height: 14px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                    </svg>
+                    ${bucket}
+                </div>
+            `).join('');
+        }
+
+        // 选择连接
+        function selectConnection(element, connectionName, bucketCount) {
+            // 移除所有 active
+            document.querySelectorAll('.tree-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // 添加 active 到当前
+            element.classList.add('active');
+            
+            // 更新状态
+            currentConnection = connectionName;
+            currentBucketCount = bucketCount;
+            
+            // 更新显示
+            document.getElementById('currentConnection').textContent = connectionName;
+            document.getElementById('currentBucketCount').textContent = bucketCount;
+            document.getElementById('bucketCount').textContent = bucketCount;
+            document.getElementById('collapsedCount').textContent = bucketCount;
+            
+            // 重新渲染桶列表（显示不同长短）
+            renderBuckets(bucketCount);
+            
+            // 自动展开桶区域
+            if (!isExpanded) {
+                toggleBuckets();
+            }
+        }
+
+        // 切换桶区域折叠
+        function toggleBuckets() {
+            const section = document.getElementById('bucketsSection');
+            isExpanded = !isExpanded;
+            
+            if (isExpanded) {
+                section.classList.remove('collapsed');
+                section.classList.add('expanded');
+            } else {
+                section.classList.remove('expanded');
+                section.classList.add('collapsed');
+            }
+        }
+
+        // 选择桶
+        function selectBucket(element) {
+            document.querySelectorAll('.bucket-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            element.classList.add('active');
+        }
+
+        // 切换文件夹展开/折叠
+        function toggleFolder(element) {
+            const children = element.nextElementSibling;
+            if (children && children.classList.contains('tree-children')) {
+                const isHidden = children.style.display === 'none';
+                children.style.display = isHidden ? 'block' : 'none';
+                element.innerHTML = element.innerHTML.replace(
+                    isHidden ? '📁' : '📂',
+                    isHidden ? '📂' : '📁'
+                );
+            }
+        }
+
+        // 初始化
+        initBuckets();
+    </script>
+</body>
+</html>

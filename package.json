@@ -2,11 +2,10 @@
   "name": "s3-client",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
-  "main": "src/main/index.ts",
+  "main": "dist/main/index.js",
   "scripts": {
     "dev": "concurrently \"wait-on http://localhost:5173 && electron .\" \"vite\"",
-    "build": "tsc -b && vite build && electron-builder",
+    "build": "vite build && node build.js && electron-builder --config electron-builder.json",
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "electron ."
@@ -35,6 +34,7 @@
     "electron": "^40.6.1",
     "electron-builder": "^26.8.1",
     "electron-reload": "^2.0.0-alpha.1",
+    "esbuild": "^0.27.3",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
@@ -59,11 +59,17 @@
     },
     "files": [
       "dist/**/*",
-      "src/main/**/*"
+      "!dist/mac-arm64",
+      "!dist/S3 Client*.dmg",
+      "!dist/S3 Client*.dmg.blockmap",
+      "!dist/latest-mac.yml"
     ],
     "mac": {
       "target": "dmg",
       "category": "public.app-category.developer-tools"
+    },
+    "extraMetadata": {
+      "main": "dist/main/index.js"
     }
   }
 }

@@ -1,10 +1,5 @@
-import electron from 'electron';
-const { app, BrowserWindow } = electron;
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const { app, BrowserWindow } = require('electron');
+const path = require('path');
 
 let mainWindow: typeof BrowserWindow.prototype | null = null;
 

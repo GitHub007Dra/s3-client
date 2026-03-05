@@ -1,4 +1,4 @@
-import type { ConnectionConfig } from '../../shared/types';
+import type { ConnectionItem } from '../../shared/types';
 import type { ThemeMode } from '../store/slices/themeSlice';
 import type { TransferTask } from '../store/slices/transfersSlice';
 
@@ -7,34 +7,72 @@ const THEME_KEY = 's3-client-theme';
 const TRANSFERS_KEY = 's3-client-transfers';
 
 export class StorageService {
-  static saveConnections(connections: ConnectionConfig[]): void {
+  static saveConnections(items: ConnectionItem[]): void {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(connections));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
     } catch (error) {
       console.error('Failed to save connections:', error);
     }
   }
 
-  static loadConnections(): ConnectionConfig[] {
+  static loadConnections(): ConnectionItem[] {
     try {
       const data = localStorage.getItem(STORAGE_KEY);
       if (!data) return [];
       
-      const connections = JSON.parse(data);
-      // 转换日期字符串为 Date 对象，并处理属性名映射
-      return connections.map((conn: any) => ({
+      const parsed = JSON.parse(data);
+      
+      // 检查是否是新格式（包含 type 字段）
+      if (Array.isArray(parsed) && parsed.length > 0 && 'type' in parsed[0]) {
+        // 新格式：直接转换
+        return parsed.map((item: any) => ({
+          id: item.id,
+          type: item.type,
+          name: item.name,
+          parentId: item.parentId || null,
+          createdAt: new Date(item.createdAt || Date.now()),
+          updatedAt: new Date(item.updatedAt || Date.now()),
+          connection: item.connection ? {
+            id: item.connection.id,
+            name: item.connection.name,
+            endpoint: item.connection.endpoint,
+            region: item.connection.region || 'us-east-1',
+            accessKeyId: item.connection.accessKeyId || item.connection.access_key || '',
+            secretAccessKey: item.connection.secretAccessKey || item.connection.secret_key || '',
+            sessionToken: item.connection.sessionToken || item.connection.session_token,
+            isDefault: item.connection.isDefault,
+            createdAt: new Date(item.connection.createdAt || Date.now()),
+            updatedAt: new Date(item.connection.updatedAt || Date.now()),
+          } : undefined,
+        }));
+      }
+      
+      // 旧格式：ConnectionConfig[]，需要迁移
+      console.log('Migrating old connections format to new format...');
+      const migrated: ConnectionItem[] = parsed.map((conn: any) => ({
         id: conn.id,
+        type: 'connection',
         name: conn.name,
-        endpoint: conn.endpoint,
-        region: conn.region || 'us-east-1',
-        // 支持多种属性名格式
-        accessKeyId: conn.accessKeyId || conn.access_key || '',
-        secretAccessKey: conn.secretAccessKey || conn.secret_key || '',
-        sessionToken: conn.sessionToken || conn.session_token,
-        isDefault: conn.isDefault,
+        parentId: null,
         createdAt: new Date(conn.createdAt || Date.now()),
         updatedAt: new Date(conn.updatedAt || Date.now()),
+        connection: {
+          id: conn.id,
+          name: conn.name,
+          endpoint: conn.endpoint,
+          region: conn.region || 'us-east-1',
+          accessKeyId: conn.accessKeyId || conn.access_key || '',
+          secretAccessKey: conn.secretAccessKey || conn.secret_key || '',
+          sessionToken: conn.sessionToken || conn.session_token,
+          isDefault: conn.isDefault,
+          createdAt: new Date(conn.createdAt || Date.now()),
+          updatedAt: new Date(conn.updatedAt || Date.now()),
+        },
       }));
+      
+      // 保存迁移后的数据
+      StorageService.saveConnections(migrated);
+      return migrated;
     } catch (error) {
       console.error('Failed to load connections:', error);
       return [];
@@ -98,36 +136,25 @@ export class StorageService {
     try {
       const data = localStorage.getItem(TRANSFERS_KEY);
       if (!data) return [];
-
+      
       const tasks = JSON.parse(data);
-      const loadedTasks: TransferTask[] = [];
+      const result: TransferTask[] = [];
       
       Object.values(tasks).forEach((task: any) => {
-        // 上传任务：没有 localPath 或 file 时无法恢复，跳过
+        // 跳过无法恢复的上传任务（没有 localPath 且没有 file）
         if (task.type === 'upload' && !task.localPath && !task.file) {
           console.warn(`跳过无法恢复的上传任务: ${task.fileName}`);
           return;
         }
         
-        loadedTasks.push({
+        result.push({
           ...task,
           createdAt: new Date(task.createdAt),
           updatedAt: new Date(task.updatedAt),
-          // 恢复时状态设为暂停，等待用户手动恢复
-          status: 'paused' as const,
         });
       });
       
-      // 清理 localStorage 中无效的任务
-      if (loadedTasks.length < Object.keys(tasks).length) {
-        const validTasks: Record<string, TransferTask> = {};
-        loadedTasks.forEach(task => {
-          validTasks[task.id] = task;
-        });
-        localStorage.setItem(TRANSFERS_KEY, JSON.stringify(validTasks));
-      }
-      
-      return loadedTasks;
+      return result;
     } catch (error) {
       console.error('Failed to load transfers:', error);
       return [];
@@ -148,8 +175,8 @@ export class StorageService {
       const existingData = localStorage.getItem(TRANSFERS_KEY);
       const tasks: Record<string, TransferTask> = existingData ? JSON.parse(existingData) : {};
       
-      // 只保存支持断点续传的任务
-      if (task.resumable) {
+      // 只有可恢复的任务才保存
+      if (task.resumable && (task.status === 'paused' || task.status === 'failed')) {
         tasks[task.id] = {
           ...task,
           file: undefined,
@@ -176,5 +203,4 @@ export class StorageService {
       console.error('Failed to remove transfer task:', error);
     }
   }
-
 }

@@ -1,18 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import type { RootState, AppDispatch } from '../renderer/store';
-import type { ConnectionConfig } from '../shared/types';
+import { useDispatch, useSelector } from 'react-redux';
+import type { AppDispatch, RootState } from '../renderer/store';
+import type { ConnectionConfig, ConnectionItem } from '../shared/types';
 import { S3Service } from '../renderer/services/s3Service';
-import { addConnection, updateConnection, deleteConnection, setCurrentConnection } from '../renderer/store/slices/connectionsSlice';
+import { addConnection, updateConnection, setCurrentConnection } from '../renderer/store/slices/connectionsSlice';
 import { setBuckets, setCurrentBucket, setFiles, setCurrentPath } from '../renderer/store/slices/filesSlice';
+import { Database, X } from 'lucide-react';
 
 interface ConnectionModalProps {
   isOpen: boolean;
   onClose: () => void;
+  editingItem: ConnectionItem | null;
+  parentId: string | null;
   onConnectionSelect: (connectionId: string) => void;
 }
 
-const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onConnectionSelect }) => {
+// 表单默认值
+const DEFAULT_VALUES = {
+  region: 'us-east-1',
+};
+
+const ConnectionModal: React.FC<ConnectionModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  editingItem,
+  parentId,
+  onConnectionSelect 
+}) => {
   const [connectionName, setConnectionName] = useState('');
   const [endpoint, setEndpoint] = useState('');
   const [region, setRegion] = useState('');
@@ -21,39 +35,43 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
   const [sessionToken, setSessionToken] = useState('');
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const connections = useSelector((state: RootState) => state.connections.connections);
-  const currentConnectionId = useSelector((state: RootState) => state.connections.currentConnectionId);
   const dispatch = useDispatch<AppDispatch>();
+  const existingItems = useSelector((state: RootState) => state.connections.items);
+
+  const isEditing = editingItem?.type === 'connection';
 
   // 重置表单当弹窗打开时
   useEffect(() => {
     if (isOpen) {
-      clearForm();
+      if (isEditing && editingItem?.connection) {
+        // 编辑模式：加载现有连接数据
+        const conn = editingItem.connection;
+        setConnectionName(conn.name);
+        setEndpoint(conn.endpoint);
+        setRegion(conn.region || '');
+        setAccessKey(conn.accessKeyId);
+        setSecretKey(conn.secretAccessKey);
+        setSessionToken(conn.sessionToken || '');
+      } else {
+        // 新建模式：清空表单，使用默认值
+        setConnectionName('');
+        setEndpoint('');
+        setRegion('');
+        setAccessKey('');
+        setSecretKey('');
+        setSessionToken('');
+      }
+      setTestResult(null);
     }
-  }, [isOpen]);
+  }, [isOpen, editingItem, isEditing]);
 
-  const loadConnectionToForm = (conn: ConnectionConfig) => {
-    setEditingId(conn.id);
-    setConnectionName(conn.name);
-    setEndpoint(conn.endpoint);
-    setRegion(conn.region || '');
-    setAccessKey(conn.accessKeyId);
-    setSecretKey(conn.secretAccessKey);
-    setSessionToken(conn.sessionToken || '');
-    setTestResult(null);
-  };
-
-  const clearForm = () => {
-    setEditingId(null);
-    setConnectionName('');
-    setEndpoint('');
-    setRegion('');
-    setAccessKey('');
-    setSecretKey('');
-    setSessionToken('');
-    setTestResult(null);
+  const getRegionValue = (): string => {
+    // 如果用户填写了，使用用户填写的
+    if (region.trim()) return region.trim();
+    // 否则使用默认值
+    return DEFAULT_VALUES.region;
   };
 
   const handleTestConnection = async () => {
@@ -66,14 +84,14 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
     setTestResult(null);
 
     const config: ConnectionConfig = {
-      id: editingId || Date.now().toString(),
+      id: isEditing ? editingItem!.id : Date.now().toString(),
       name: connectionName,
       endpoint,
-      region,
+      region: getRegionValue(),
       accessKeyId: accessKey,
       secretAccessKey: secretKey,
       sessionToken,
-      createdAt: editingId ? connections.find(c => c.id === editingId)?.createdAt || new Date() : new Date(),
+      createdAt: isEditing ? editingItem!.connection!.createdAt : new Date(),
       updatedAt: new Date(),
     };
 
@@ -88,81 +106,78 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
     }
   };
 
-  const handleAddOrUpdateConnection = async () => {
+  const handleSave = async () => {
     if (!connectionName || !endpoint || !accessKey || !secretKey) {
       setTestResult('✗ 请填写所有必填字段');
       return;
     }
 
+    // 检查是否已存在同名连接（编辑模式下排除自己）
+    const isDuplicateName = existingItems.some(
+      item =>
+        item.type === 'connection' &&
+        item.connection?.name === connectionName.trim() &&
+        item.id !== (isEditing ? editingItem?.id : undefined)
+    );
+    
+    if (isDuplicateName) {
+      setTestResult('✗ 已存在同名连接，请使用其他名称');
+      return;
+    }
+
+    setIsSaving(true);
+
     const config: ConnectionConfig = {
-      id: editingId || Date.now().toString(),
+      id: isEditing ? editingItem!.id : Date.now().toString(),
       name: connectionName,
       endpoint,
-      region,
+      region: getRegionValue(),
       accessKeyId: accessKey,
       secretAccessKey: secretKey,
       sessionToken,
-      createdAt: editingId ? connections.find(c => c.id === editingId)?.createdAt || new Date() : new Date(),
+      createdAt: isEditing ? editingItem!.connection!.createdAt : new Date(),
       updatedAt: new Date(),
     };
 
-    if (editingId) {
-      dispatch(updateConnection(config));
-      setTestResult('✓ 连接已更新!');
-    } else {
-      dispatch(addConnection(config));
-      dispatch(setCurrentConnection(config.id));
-      onConnectionSelect(config.id);
-      setTestResult('✓ 连接已保存!');
-    }
-
-    clearForm();
-  };
-
-  const handleDeleteConnection = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (confirm('确定要删除这个连接吗？')) {
-      dispatch(deleteConnection(id));
-      if (currentConnectionId === id) {
-        dispatch(setCurrentConnection(null));
-        dispatch(setBuckets([]));
-        dispatch(setFiles([]));
-        dispatch(setCurrentBucket(null));
-        dispatch(setCurrentPath(''));
-      }
-    }
-  };
-
-  const handleSelectConnection = async (conn: ConnectionConfig) => {
-    dispatch(setCurrentConnection(conn.id));
-    onConnectionSelect(conn.id);
-    onClose();
-
-    // 加载存储桶列表
     try {
       const s3Service = new S3Service(dispatch);
-      await s3Service.connect(conn);
-      const s3Buckets = await s3Service.listBuckets(conn.id);
+      
+      // 先测试连接是否有效
+      await s3Service.connect(config);
+      const s3Buckets = await s3Service.listBuckets(config.id);
+      
+      // 连接测试通过后才添加到列表
+      if (isEditing) {
+        dispatch(updateConnection(config));
+      } else {
+        dispatch(addConnection({ config, parentId }));
+        dispatch(setCurrentConnection(config.id));
+        onConnectionSelect(config.id);
+      }
 
+      // 加载存储桶列表
       if (!s3Buckets || s3Buckets.length === 0) {
         dispatch(setBuckets([]));
       } else {
         const buckets: import('../shared/types').Bucket[] = s3Buckets.map((b, index) => ({
-          id: `${conn.id}-${b.name}-${index}`,
+          id: `${config.id}-${b.name}-${index}`,
           name: b.name,
           region: b.region,
           creationDate: b.creationDate,
         }));
         dispatch(setBuckets(buckets));
       }
-
+      
       dispatch(setCurrentBucket(null));
       dispatch(setFiles([]));
       dispatch(setCurrentPath(''));
+      
+      onClose();
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      setTestResult('连接失败: ' + errorMsg);
-      dispatch(setBuckets([]));
+      setTestResult('✗ 保存失败: ' + errorMsg);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -170,17 +185,21 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content connection-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">管理连接</h2>
-          <button className="modal-close-btn" onClick={onClose}>×</button>
+          <div className="modal-title-wrapper">
+            <Database size={20} className="modal-icon" />
+            <h2 className="modal-title">
+              {isEditing ? '编辑连接' : '添加连接'}
+            </h2>
+          </div>
+          <button className="modal-close-btn" onClick={onClose}>
+            <X size={20} />
+          </button>
         </div>
 
         <div className="modal-body">
-          {/* 表单区域 */}
           <div className="connection-form">
-            <h3 className="form-section-title">{editingId ? '编辑连接' : '添加新连接'}</h3>
-            
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">连接名称 *</label>
@@ -205,117 +224,77 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
               </div>
 
               <div className="form-group">
-                <label className="form-label">区域 Region</label>
+                <label className="form-label">
+                  Region 区域
+                  <span className="form-hint">（默认: {DEFAULT_VALUES.region}）</span>
+                </label>
                 <input
                   type="text"
                   value={region}
                   onChange={(e) => setRegion(e.target.value)}
                   className="form-input"
-                  placeholder="us-east-1"
+                  placeholder={DEFAULT_VALUES.region}
                 />
               </div>
 
               <div className="form-group">
-                <label className="form-label">Access Key *</label>
+                <label className="form-label">Access Key ID *</label>
                 <input
                   type="text"
                   value={accessKey}
                   onChange={(e) => setAccessKey(e.target.value)}
                   className="form-input"
-                  placeholder="AKIA..."
+                  placeholder="AKIAIOSFODNN7EXAMPLE"
                 />
               </div>
 
               <div className="form-group">
-                <label className="form-label">Secret Key *</label>
+                <label className="form-label">Secret Access Key *</label>
                 <input
                   type="password"
                   value={secretKey}
                   onChange={(e) => setSecretKey(e.target.value)}
                   className="form-input"
-                  placeholder="••••••••"
+                  placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
                 />
               </div>
 
               <div className="form-group">
-                <label className="form-label">Session Token (可选)</label>
+                <label className="form-label">
+                  Session Token
+                  <span className="form-hint">（可选）</span>
+                </label>
                 <input
                   type="text"
                   value={sessionToken}
                   onChange={(e) => setSessionToken(e.target.value)}
                   className="form-input"
-                  placeholder="可选的会话令牌"
+                  placeholder="临时凭证的会话令牌"
                 />
               </div>
             </div>
 
-            <div className="form-actions">
-              <button
-                onClick={handleTestConnection}
-                disabled={isTesting}
-                className="btn btn-secondary"
-              >
-                {isTesting ? '测试中...' : '测试连接'}
-              </button>
-              <button
-                onClick={handleAddOrUpdateConnection}
-                className="btn btn-primary"
-              >
-                {editingId ? '更新' : '添加'}
-              </button>
-              {editingId && (
-                <button
-                  onClick={clearForm}
-                  className="btn btn-ghost"
-                >
-                  取消编辑
-                </button>
-              )}
-            </div>
-
             {testResult && (
-              <div className={`test-result ${testResult.includes('成功') || testResult.includes('更新') ? 'success' : 'error'}`}>
+              <div className={`test-result ${testResult.startsWith('✓') ? 'success' : 'error'}`}>
                 {testResult}
               </div>
             )}
-          </div>
 
-          {/* 已保存的连接列表 */}
-          <div className="saved-connections">
-            <h3 className="form-section-title">已保存的连接</h3>
-            <div className="connections-list">
-              {connections.length === 0 ? (
-                <p className="empty-text">暂无保存的连接</p>
-              ) : (
-                connections.map((conn: ConnectionConfig) => (
-                  <div
-                    key={conn.id}
-                    className={`connection-item ${currentConnectionId === conn.id ? 'active' : ''}`}
-                    onClick={() => handleSelectConnection(conn)}
-                  >
-                    <div className="connection-info">
-                      <div className="connection-name">{conn.name}</div>
-                      <div className="connection-endpoint">{conn.endpoint}</div>
-                    </div>
-                    <div className="connection-actions">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); loadConnectionToForm(conn); }}
-                        className="action-btn edit"
-                        title="编辑"
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        onClick={(e) => handleDeleteConnection(conn.id, e)}
-                        className="action-btn delete"
-                        title="删除"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
+            <div className="form-actions">
+              <button 
+                className="btn btn-secondary"
+                onClick={handleTestConnection}
+                disabled={isTesting || isSaving}
+              >
+                {isTesting ? '测试中...' : '测试连接'}
+              </button>
+              <button 
+                className="btn btn-primary"
+                onClick={handleSave}
+                disabled={isSaving}
+              >
+                {isSaving ? '保存中...' : (isEditing ? '保存修改' : '添加连接')}
+              </button>
             </div>
           </div>
         </div>

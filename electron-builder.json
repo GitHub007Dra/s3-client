@@ -1,0 +1,21 @@
+{
+  "appId": "com.s3-client.app",
+  "productName": "S3 Client",
+  "directories": {
+    "output": "dist",
+    "buildResources": "build"
+  },
+  "files": [
+    "dist/**/*",
+    "!dist/mac-arm64",
+    "!dist/S3 Client-0.0.0-arm64.dmg",
+    "!dist/S3 Client-0.0.0-arm64.dmg.blockmap"
+  ],
+  "mac": {
+    "target": "dmg",
+    "category": "public.app-category.developer-tools"
+  },
+  "extraMetadata": {
+    "main": "dist/main/index.js"
+  }
+}

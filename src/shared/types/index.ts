@@ -1,3 +1,17 @@
+// 连接项类型：目录或连接
+export type ConnectionItemType = 'folder' | 'connection';
+
+export interface ConnectionItem {
+  id: string;
+  type: ConnectionItemType;
+  name: string;
+  parentId: string | null; // null 表示根目录
+  createdAt: Date;
+  updatedAt: Date;
+  // 当 type 为 'connection' 时有值
+  connection?: ConnectionConfig;
+}
+
 export interface ConnectionConfig {
   id: string;
   name: string;
@@ -96,7 +110,7 @@ export interface FileItem {
 }
 
 export interface ConnectionState {
-  connections: ConnectionConfig[];
+  items: ConnectionItem[]; // 连接和目录的统一列表
   currentConnectionId: string | null;
   loading: boolean;
   error: string | null;

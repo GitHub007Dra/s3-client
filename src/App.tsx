@@ -8,7 +8,7 @@ import Sidebar from './components/Sidebar';
 import FileBrowser from './components/FileBrowser';
 import ConnectionModal from './components/ConnectionModal';
 import TransferProgress from './components/TransferProgress';
-import type { Bucket } from './shared/types';
+import type { Bucket, ConnectionItem } from './shared/types';
 import './App.css';
 
 // 内部组件
@@ -17,6 +17,8 @@ function AppContent() {
   const [currentBucket, setCurrentBucket] = useState<Bucket | null>(null);
   const [currentConnectionId, setCurrentConnectionId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<ConnectionItem | null>(null);
+  const [newConnectionParentId, setNewConnectionParentId] = useState<string | null>(null);
 
   // 应用启动时恢复未完成的传输任务
   useEffect(() => {
@@ -42,12 +44,22 @@ function AppContent() {
     setCurrentBucket(bucket);
   };
 
-  const handleOpenModal = () => {
+  const handleAddConnection = (parentId: string | null) => {
+    setNewConnectionParentId(parentId);
+    setEditingItem(null);
+    setIsModalOpen(true);
+  };
+
+  const handleEditConnection = (item: ConnectionItem) => {
+    setEditingItem(item);
+    setNewConnectionParentId(null);
     setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
+    setEditingItem(null);
+    setNewConnectionParentId(null);
   };
 
   return (
@@ -59,7 +71,8 @@ function AppContent() {
       <main className="app-main">
         <aside className="app-sidebar">
           <Sidebar 
-            onManageConnections={handleOpenModal}
+            onAddConnection={handleAddConnection}
+            onEditConnection={handleEditConnection}
             onConnectionSelect={handleConnectionSelect}
             onBucketSelect={handleBucketSelect}
           />
@@ -90,11 +103,11 @@ function AppContent() {
               <div className="empty-steps">
                 <h3>开始使用：</h3>
                 <ol>
-                  <li>点击左侧"管理连接"按钮</li>
-                  <li>添加新的 S3 连接配置</li>
+                  <li>右键点击左侧空白处或点击 + 按钮</li>
+                  <li>创建目录或添加新的 S3 连接</li>
                   <li>填写 Endpoint、Region、Access Key 和 Secret Key</li>
                   <li>点击"测试连接"验证配置</li>
-                  <li>点击"添加"保存连接</li>
+                  <li>点击"保存"添加连接</li>
                   <li>选择已保存的连接查看存储桶</li>
                   <li>选择存储桶浏览文件</li>
                 </ol>
@@ -102,7 +115,7 @@ function AppContent() {
               <div className="empty-features">
                 <h3>功能特性：</h3>
                 <ul>
-                  <li>✓ 多连接管理</li>
+                  <li>✓ 自定义目录结构管理连接</li>
                   <li>✓ 文件/文件夹上传下载</li>
                   <li>✓ 分片上传大文件</li>
                   <li>✓ 预签名链接生成</li>
@@ -119,6 +132,8 @@ function AppContent() {
       <ConnectionModal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
+        editingItem={editingItem}
+        parentId={newConnectionParentId}
         onConnectionSelect={handleConnectionSelect}
       />
 

@@ -1007,6 +1007,191 @@ td.col-actions .action-btn-wrapper {
   border-left: 3px solid var(--accent-red);
 }
 
+/* ==================== 树形连接列表样式 ==================== */
+.connection-tree-section {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.connection-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tree-group {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tree-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 6px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.tree-group-header:hover {
+  background-color: var(--bg-hover);
+}
+
+.tree-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  transition: transform 0.2s ease;
+  color: var(--text-tertiary);
+}
+
+.tree-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.tree-chevron-placeholder {
+  width: 16px;
+  height: 16px;
+}
+
+.tree-group-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tree-group-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-group-count {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  background-color: var(--bg-primary);
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.tree-group-content {
+  display: flex;
+  flex-direction: column;
+  padding-left: 8px;
+  margin-top: 2px;
+}
+
+.tree-connection-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 12px;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+.tree-item:hover {
+  background-color: var(--bg-hover);
+}
+
+.tree-item.active {
+  background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
+  color: #fff;
+}
+
+.tree-item.active .tree-item-icon {
+  color: #fff;
+}
+
+.tree-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--accent-blue);
+}
+
+.tree-item-icon.connection-icon {
+  color: var(--text-secondary);
+}
+
+.tree-item.active .tree-item-icon.connection-icon {
+  color: #fff;
+}
+
+.tree-item-icon.bucket-icon {
+  color: var(--text-tertiary);
+}
+
+.tree-item.active .tree-item-icon.bucket-icon {
+  color: #fff;
+}
+
+.tree-item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.tree-loading {
+  font-size: 10px;
+  animation: spin 1s linear infinite;
+}
+
+.tree-buckets {
+  display: flex;
+  flex-direction: column;
+  padding-left: 12px;
+}
+
+.tree-bucket {
+  padding: 5px 6px;
+  font-size: 11px;
+}
+
+.tree-bucket .tree-item-name {
+  font-weight: 400;
+}
+
+.tree-indent {
+  width: 16px;
+}
+
+.sidebar-section-title .connection-count {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  margin-left: auto;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .loading-spinner {
   font-size: 12px;
   animation: spin 1s linear infinite;
@@ -1753,6 +1938,305 @@ td.col-actions .action-btn-wrapper {
 .settings-modal .btn-secondary {
   color: #666;
   background-color: #f5f5f5;
+}
+
+/* ==================== 新版树形连接列表样式 ==================== */
+.connection-tree-section {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.sidebar-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding: 0 4px;
+}
+
+.sidebar-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.sidebar-add-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--accent-blue);
+}
+
+.sidebar-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.sidebar-empty-state .empty-icon {
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.sidebar-empty-state p {
+  font-size: 12px;
+  margin: 0;
+}
+
+.connection-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 50px;
+}
+
+.tree-node {
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 13px;
+  color: var(--text-primary);
+  user-select: none;
+  position: relative;
+}
+
+.tree-item:hover {
+  background-color: var(--bg-hover);
+}
+
+.tree-item:hover .tree-drag-handle {
+  opacity: 1;
+}
+
+.tree-item.active {
+  background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
+  color: #fff;
+}
+
+.tree-item.active .tree-item-icon {
+  color: #fff;
+}
+
+.tree-item.drag-over {
+  background-color: var(--accent-blue);
+  opacity: 0.3;
+}
+
+.tree-item.dragging {
+  opacity: 0.5;
+}
+
+.tree-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  transition: transform 0.2s ease;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.tree-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.tree-chevron.has-children:hover {
+  color: var(--text-primary);
+}
+
+.tree-chevron-placeholder {
+  width: 16px;
+  height: 16px;
+}
+
+.tree-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.tree-item.active .tree-item-icon {
+  color: #fff;
+}
+
+.folder-icon {
+  color: #F59E0B;
+}
+
+.tree-item.active .folder-icon {
+  color: #fff;
+}
+
+.connection-icon {
+  color: var(--accent-blue);
+}
+
+.tree-item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.tree-drag-handle {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  cursor: grab;
+  color: var(--text-tertiary);
+}
+
+.tree-drag-handle:active {
+  cursor: grabbing;
+}
+
+.tree-loading {
+  font-size: 10px;
+  animation: spin 1s linear infinite;
+}
+
+.tree-children {
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-rename-input {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--accent-blue);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+}
+
+/* ==================== 侧边栏布局优化 ==================== */
+/* 连接区域 - 最大高度8行，超过后滚动 */
+.connections-section {
+  max-height: 288px;
+  min-height: 120px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 存储桶区域 - 自适应剩余空间 */
+.buckets-section {
+  border-top: 1px solid var(--border-color);
+  flex: 1;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.buckets-section .sidebar-section-title {
+  flex-shrink: 0;
+}
+
+.buckets-list {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 右键菜单样式 */
+.context-menu {
+  position: absolute;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  padding: 4px;
+  z-index: 1000;
+  min-width: 140px;
+  animation: contextMenuFadeIn 0.1s ease-out;
+}
+
+@keyframes contextMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary);
+  transition: all 0.15s ease;
+}
+
+.context-menu-item:hover {
+  background-color: var(--bg-hover);
+}
+
+.context-menu-item.danger {
+  color: var(--accent-red);
+}
+
+.context-menu-item.danger:hover {
+  background-color: rgba(244, 63, 94, 0.1);
+}
+
+.context-menu-divider {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 4px 0;
+}
+
+.sidebar-section-title .connection-count {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  margin-left: 4px;
 }
 
 .settings-modal .btn-secondary:hover {

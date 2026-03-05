@@ -11,7 +11,7 @@ import {
   type TransferChunk,
 } from '../store/slices/transfersSlice';
 import { setFiles, setLoading as setFilesLoading, setError as setFilesError } from '../store/slices/filesSlice';
-import { setConnections, setCurrentConnection, setLoading as setConnectionsLoading, setError as setConnectionsError } from '../store/slices/connectionsSlice';
+import { setItems, setCurrentConnection, setLoading as setConnectionsLoading, setError as setConnectionsError } from '../store/slices/connectionsSlice';
 import { StorageService } from './storageService';
 
 // 进度回调类型
@@ -1058,7 +1058,19 @@ export class S3Service {
       );
 
       const connections = validConnections.filter(Boolean) as ConnectionConfig[];
-      this.dispatch(setConnections(connections));
+      
+      // Convert to ConnectionItem format and dispatch
+      const items = connections.map(conn => ({
+        id: conn.id,
+        type: 'connection' as const,
+        name: conn.name,
+        parentId: null,
+        createdAt: conn.createdAt,
+        updatedAt: conn.updatedAt,
+        connection: conn,
+      }));
+      
+      this.dispatch(setItems(items));
       
       // Set first connection as default if none is set
       if (connections.length > 0 && !connections.find(c => c.isDefault)) {
