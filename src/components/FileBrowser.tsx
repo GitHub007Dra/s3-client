@@ -217,25 +217,121 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
     e.stopPropagation();
   };
 
+  // 递归读取文件夹内容
+  const readDirectory = (entry: FileSystemDirectoryEntry): Promise<FileSystemEntry[]> => {
+    return new Promise((resolve, reject) => {
+      const reader = entry.createReader();
+      const entries: FileSystemEntry[] = [];
+      
+      const readEntries = () => {
+        reader.readEntries((results) => {
+          if (results.length === 0) {
+            resolve(entries);
+          } else {
+            entries.push(...results);
+            readEntries(); // 继续读取，直到没有更多条目
+          }
+        }, reject);
+      };
+      
+      readEntries();
+    });
+  };
+
+  // 递归获取所有文件
+  const getAllFiles = async (
+    entry: FileSystemEntry,
+    path: string = ''
+  ): Promise<{ file: File; relativePath: string }[]> => {
+    const files: { file: File; relativePath: string }[] = [];
+    
+    if (entry.isFile) {
+      const fileEntry = entry as FileSystemFileEntry;
+      try {
+        const file = await new Promise<File>((resolve, reject) => {
+          fileEntry.file(resolve, reject);
+        });
+        
+        // 验证文件是否可读（尝试读取第一个字节）
+        try {
+          const testChunk = file.slice(0, 1);
+          await testChunk.arrayBuffer();
+        } catch (readErr) {
+          // 文件不可读（如 socket、符号链接等），跳过
+          console.warn(`跳过不可读文件 ${path}${entry.name}:`, readErr);
+          return files;
+        }
+        
+        files.push({ file, relativePath: path + entry.name });
+      } catch (err) {
+        // 跳过无法读取的文件
+        console.warn(`无法读取文件 ${path}${entry.name}:`, err);
+      }
+    } else if (entry.isDirectory) {
+      const dirEntry = entry as FileSystemDirectoryEntry;
+      try {
+        const entries = await readDirectory(dirEntry);
+        
+        for (const childEntry of entries) {
+          const childFiles = await getAllFiles(
+            childEntry,
+            path + entry.name + '/'
+          );
+          files.push(...childFiles);
+        }
+      } catch (err) {
+        console.warn(`无法读取目录 ${path}${entry.name}:`, err);
+      }
+    }
+    
+    return files;
+  };
+
   // 处理文件放置
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
 
-    const files = e.dataTransfer.files;
-    if (!files || files.length === 0 || !bucket || !connectionId) return;
+    if (!bucket || !connectionId) return;
+
+    const items = e.dataTransfer.items;
+    if (!items || items.length === 0) return;
 
     const s3Service = new S3Service(dispatch);
+    const allFiles: { file: File; relativePath: string }[] = [];
+
+    // 遍历所有拖放的条目
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const entry = item.webkitGetAsEntry?.();
+      
+      if (entry) {
+        const files = await getAllFiles(entry);
+        allFiles.push(...files);
+      }
+    }
+
+    if (allFiles.length === 0) return;
+
+    // 上传所有文件
+    let successCount = 0;
+    let failCount = 0;
     
-    for (const file of Array.from(files)) {
-      const key = currentPath + file.name;
+    for (const { file, relativePath } of allFiles) {
+      const key = currentPath + relativePath;
       try {
         await s3Service.uploadFile(file, connectionId, bucket.name, key);
+        successCount++;
       } catch (err) {
+        failCount++;
         console.error('Upload failed:', err);
-        alert(`上传文件 ${file.name} 失败: ${err instanceof Error ? err.message : '未知错误'}`);
       }
+    }
+
+    // 显示上传结果
+    if (failCount > 0) {
+      alert(`上传完成: ${successCount} 个成功, ${failCount} 个失败`);
     }
 
     // 刷新文件列表

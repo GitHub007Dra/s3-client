@@ -25,12 +25,26 @@ import {
 } from 'lucide-react';
 import './TransferProgress.css';
 
-// 格式化文件大小
+// 检测操作系统平台
+const getPlatform = (): 'macos' | 'windows' | 'linux' | 'unknown' => {
+  const userAgent = navigator.userAgent.toLowerCase();
+  if (userAgent.includes('mac') || userAgent.includes('darwin')) return 'macos';
+  if (userAgent.includes('win')) return 'windows';
+  if (userAgent.includes('linux')) return 'linux';
+  return 'unknown';
+};
+
+// 格式化文件大小（根据操作系统自动选择计算方式）
+// macOS/Linux 使用十进制 (1000)，Windows 使用二进制 (1024)
 const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 B';
+  
+  const platform = getPlatform();
+  // Windows 使用二进制 (1024)，其他系统使用十进制 (1000)
+  const k = platform === 'windows' ? 1024 : 1000;
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const k = 1024;
   const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + units[i];
 };
 
@@ -255,24 +269,9 @@ const TransferProgress: React.FC = () => {
     const task = tasks[id];
     if (!task) return;
     
-    // 如果是上传任务，需要用户选择文件
-    if (task.type === 'upload' && !task.file) {
-      // 创建一个隐藏的文件输入，让用户选择文件
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.onchange = async (e) => {
-        const file = (e.target as HTMLInputElement).files?.[0];
-        if (file) {
-          const s3Service = new S3Service(dispatch);
-          await s3Service.resumeTransfer(task, file);
-        }
-      };
-      input.click();
-    } else {
-      // 下载任务或已有文件的上传任务
-      const s3Service = new S3Service(dispatch);
-      await s3Service.resumeTransfer(task);
-    }
+    // 恢复任务（File 对象存储在 S3Service 的内存 Map 中）
+    const s3Service = new S3Service(dispatch);
+    await s3Service.resumeTransfer(task);
   }, [dispatch, tasks]);
   
   const handleCancel = useCallback((id: string) => {

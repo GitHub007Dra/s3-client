@@ -100,13 +100,34 @@ export class StorageService {
       if (!data) return [];
 
       const tasks = JSON.parse(data);
-      return Object.values(tasks).map((task: any) => ({
-        ...task,
-        createdAt: new Date(task.createdAt),
-        updatedAt: new Date(task.updatedAt),
-        // 恢复时状态设为暂停，等待用户手动恢复
-        status: 'paused' as const,
-      }));
+      const loadedTasks: TransferTask[] = [];
+      
+      Object.values(tasks).forEach((task: any) => {
+        // 上传任务：没有 localPath 或 file 时无法恢复，跳过
+        if (task.type === 'upload' && !task.localPath && !task.file) {
+          console.warn(`跳过无法恢复的上传任务: ${task.fileName}`);
+          return;
+        }
+        
+        loadedTasks.push({
+          ...task,
+          createdAt: new Date(task.createdAt),
+          updatedAt: new Date(task.updatedAt),
+          // 恢复时状态设为暂停，等待用户手动恢复
+          status: 'paused' as const,
+        });
+      });
+      
+      // 清理 localStorage 中无效的任务
+      if (loadedTasks.length < Object.keys(tasks).length) {
+        const validTasks: Record<string, TransferTask> = {};
+        loadedTasks.forEach(task => {
+          validTasks[task.id] = task;
+        });
+        localStorage.setItem(TRANSFERS_KEY, JSON.stringify(validTasks));
+      }
+      
+      return loadedTasks;
     } catch (error) {
       console.error('Failed to load transfers:', error);
       return [];

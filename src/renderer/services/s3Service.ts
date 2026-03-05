@@ -47,6 +47,8 @@ export class S3Service {
   private static abortControllers: Map<string, AbortController> = new Map();
   // 存储下载文件句柄，用于断点续传
   private static downloadHandles: Map<string, { handle: FileSystemFileHandle; writable: FileSystemWritableFileStream }> = new Map();
+  // 存储上传的 File 对象（Redux 不能序列化 File，需要在内存中保持引用）
+  private static uploadFiles: Map<string, File> = new Map();
 
   constructor(dispatch: AppDispatch) {
     this.s3ClientManager = S3ClientManager.getInstance();
@@ -61,6 +63,11 @@ export class S3Service {
   // 获取下载句柄存储
   private getDownloadHandles(): Map<string, { handle: FileSystemFileHandle; writable: FileSystemWritableFileStream }> {
     return S3Service.downloadHandles;
+  }
+
+  // 获取上传文件存储
+  private getUploadFiles(): Map<string, File> {
+    return S3Service.uploadFiles;
   }
 
   async testConnection(config: ConnectionConfig): Promise<boolean> {
@@ -118,11 +125,14 @@ export class S3Service {
    */
   async uploadFile(file: File, connectionId: string, bucket: string, key: string): Promise<TransferTask> {
     const taskId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // 将 File 存入内存 Map（Redux 不能序列化 File 对象）
+    this.getUploadFiles().set(taskId, file);
+    
     const task: TransferTask = {
       id: taskId,
       type: 'upload',
       fileName: file.name,
-      file,
       key,
       bucket,
       connectionId,
@@ -914,10 +924,11 @@ export class S3Service {
 
     try {
       if (task.type === 'upload') {
-        if (!file && !task.file) {
+        // 从内存 Map 获取 File 对象，或直接使用传入的 file
+        const uploadFile = file || this.getUploadFiles().get(task.id);
+        if (!uploadFile) {
           throw new Error('Upload resume requires file');
         }
-        const uploadFile = file || task.file!;
         
         // 恢复分片上传
         if (task.uploadId) {
