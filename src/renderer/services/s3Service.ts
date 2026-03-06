@@ -14,6 +14,25 @@ import { setFiles, setLoading as setFilesLoading, setError as setFilesError } fr
 import { setItems, setCurrentConnection, setLoading as setConnectionsLoading, setError as setConnectionsError } from '../store/slices/connectionsSlice';
 import { StorageService } from './storageService';
 
+// 可重试的错误类型
+const RETRYABLE_ERRORS = [
+  'RequestTimeTooSkewed',
+  'time difference',
+  'clock settings',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'ENOTFOUND',
+  'ECONNREFUSED',
+  'socket hang up',
+  'network error',
+  'timeout',
+];
+
+// 最大重试次数
+const MAX_RETRIES = 3;
+// 重试延迟（毫秒）
+const RETRY_DELAY = 1000;
+
 // 进度回调类型
 export type ProgressCallback = (progress: number, speed: number, transferred: number) => void;
 
@@ -68,6 +87,56 @@ export class S3Service {
   // 获取上传文件存储
   private getUploadFiles(): Map<string, File> {
     return S3Service.uploadFiles;
+  }
+
+  // 检查错误是否可重试
+  private isRetryableError(error: any): boolean {
+    if (!error) return false;
+    const errorMessage = (error.message || error.toString() || '').toLowerCase();
+    const errorCode = (error.code || error.name || '').toLowerCase();
+    
+    return RETRYABLE_ERRORS.some(pattern =>
+      errorMessage.includes(pattern.toLowerCase()) ||
+      errorCode.includes(pattern.toLowerCase())
+    );
+  }
+
+  // 延迟函数
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // 带重试机制的 S3 操作包装器
+  private async retryableS3Operation<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+    maxRetries: number = MAX_RETRIES
+  ): Promise<T> {
+    let lastError: any;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error: any) {
+        lastError = error;
+        
+        // 检查是否是时间同步错误
+        const errorMessage = (error.message || error.toString() || '').toLowerCase();
+        if (errorMessage.includes('time') && errorMessage.includes('difference')) {
+          console.warn(`[${operationName}] Time sync error detected, waiting before retry...`);
+          // 时间同步错误需要更长的等待时间，让系统时间同步
+          await this.delay(RETRY_DELAY * 3);
+        } else if (this.isRetryableError(error) && attempt < maxRetries) {
+          console.log(`[${operationName}] Retrying (${attempt + 1}/${maxRetries})...`);
+          await this.delay(RETRY_DELAY * (attempt + 1)); // 指数退避
+        } else {
+          // 不可重试的错误，直接抛出
+          throw error;
+        }
+      }
+    }
+    
+    throw lastError;
   }
 
   async testConnection(config: ConnectionConfig): Promise<boolean> {
@@ -270,6 +339,14 @@ export class S3Service {
     // 完成后从 storage 中移除
     StorageService.removeTransferTask(taskId);
 
+    // 刷新文件列表
+    try {
+      const prefix = key.includes('/') ? key.substring(0, key.lastIndexOf('/') + 1) : undefined;
+      await this.listObjects(connectionId, bucket, prefix);
+    } catch (error) {
+      console.error('Failed to refresh file list after upload:', error);
+    }
+
     return {
       id: taskId,
       type: 'upload',
@@ -349,7 +426,12 @@ export class S3Service {
           // 将 Blob 转换为 Uint8Array
           const arrayBuffer = await chunk.arrayBuffer();
           const uint8Array = new Uint8Array(arrayBuffer);
-          const response = await this.s3ClientManager.uploadPart(connectionId, uploadId, bucket, key, partNumber, uint8Array);
+          
+          // 使用带重试机制的 uploadPart
+          const response = await this.retryableS3Operation(
+            () => this.s3ClientManager.uploadPart(connectionId, uploadId, bucket, key, partNumber, uint8Array),
+            `uploadPart-${partNumber}`
+          );
           
           transferred += chunk.size;
           const elapsed = (Date.now() - startTime) / 1000;
@@ -436,6 +518,14 @@ export class S3Service {
 
       // 完成后从 storage 中移除
       StorageService.removeTransferTask(taskId);
+
+      // 刷新文件列表
+      try {
+        const prefix = key.includes('/') ? key.substring(0, key.lastIndexOf('/') + 1) : undefined;
+        await this.listObjects(connectionId, bucket, prefix);
+      } catch (error) {
+        console.error('Failed to refresh file list after upload:', error);
+      }
 
       return {
         id: taskId,

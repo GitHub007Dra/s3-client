@@ -57,9 +57,18 @@ const formatSpeed = (bytesPerSecond: number): string => {
 // 格式化剩余时间
 const formatTimeRemaining = (seconds: number): string => {
   if (!isFinite(seconds) || seconds <= 0) return '-';
-  if (seconds < 60) return Math.ceil(seconds) + 's';
-  if (seconds < 3600) return Math.ceil(seconds / 60) + 'm';
-  return Math.ceil(seconds / 3600) + 'h';
+  
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  } else if (minutes > 0) {
+    return `${minutes}m ${secs}s`;
+  } else {
+    return `${secs}s`;
+  }
 };
 
 // 获取文件图标
@@ -188,6 +197,15 @@ const TransferItem: React.FC<TransferItemProps> = ({
                 <Play size={14} />
               </button>
             )}
+            {isFailed && (
+              <button
+                className="action-btn resume"
+                onClick={() => onResume(task.id)}
+                title="重试"
+              >
+                <Play size={14} />
+              </button>
+            )}
             {(isActive || isPaused) && (
               <button
                 className="action-btn cancel"
@@ -269,8 +287,44 @@ const TransferProgress: React.FC = () => {
     const task = tasks[id];
     if (!task) return;
     
-    // 恢复任务（File 对象存储在 S3Service 的内存 Map 中）
     const s3Service = new S3Service(dispatch);
+    
+    // 如果是失败的上传任务，且没有 File 对象（可能应用重启过），需要重新选择文件
+    if (task.type === 'upload' && task.status === 'failed') {
+      try {
+        // 尝试从 S3Service 的内存 Map 获取 File 对象
+        const uploadFiles = (S3Service as any).uploadFiles || new Map();
+        const hasFile = uploadFiles.has?.(id);
+        
+        if (!hasFile) {
+          // 没有 File 对象，需要用户重新选择文件
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.onchange = async (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (file) {
+              // 验证文件名和大小是否匹配
+              if (file.name !== task.fileName) {
+                alert(`文件名不匹配！期望: ${task.fileName}, 实际: ${file.name}`);
+                return;
+              }
+              if (file.size !== task.total) {
+                alert(`文件大小不匹配！期望: ${task.total} bytes, 实际: ${file.size} bytes`);
+                return;
+              }
+              // 使用重新选择的文件恢复上传
+              await s3Service.resumeTransfer(task, file);
+            }
+          };
+          input.click();
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to resume upload:', error);
+      }
+    }
+    
+    // 正常恢复任务
     await s3Service.resumeTransfer(task);
   }, [dispatch, tasks]);
   
