@@ -6,24 +6,55 @@
     "buildResources": "build"
   },
   "files": [
-    "dist/**/*",
-    "build/**/*",
-    "!dist/mac-arm64",
-    "!dist/S3 Client-0.0.0-arm64.dmg",
-    "!dist/S3 Client-0.0.0-arm64.dmg.blockmap"
+    "dist/main/**/*",
+    "dist/assets/**/*",
+    "dist/icons/**/*",
+    "dist/index.html",
+    "package.json",
+    "build/**/*"
+  ],
+  "asar": true,
+  "asarUnpack": [
+    "**/*.node"
   ],
   "mac": {
-    "target": "dmg",
+    "target": [
+      {
+        "target": "dmg",
+        "arch": ["x64", "arm64"]
+      }
+    ],
     "category": "public.app-category.developer-tools",
-    "icon": "build/icon.icns"
+    "icon": "build/icon.icns",
+    "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
   },
   "win": {
-    "target": "nsis",
-    "icon": "build/icon.ico"
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64", "arm64"]
+      }
+    ],
+    "icon": "build/icon.ico",
+    "artifactName": "${productName}-${version}-win-${arch}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "S3 Client"
   },
   "linux": {
-    "target": "AppImage",
-    "icon": "build"
+    "target": [
+      {
+        "target": "AppImage",
+        "arch": ["x64", "arm64"]
+      }
+    ],
+    "icon": "build",
+    "category": "Network",
+    "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
   },
   "extraMetadata": {
     "main": "dist/main/index.js"
