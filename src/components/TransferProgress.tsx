@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import type { RootState, AppDispatch } from '../renderer/store';
-import { S3Service } from '../renderer/services/s3Service';
+import { S3Service } from '../renderer/services/modules';
 import {
   removeTransferTask,
   clearCompletedTransfers,
@@ -45,7 +45,8 @@ const formatFileSize = (bytes: number): string => {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + units[i];
+  // 显示 1 位小数
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + units[i];
 };
 
 // 格式化速度

@@ -8,6 +8,7 @@ import {
   type TransferChunk,
 } from '../../store/slices/transfersSlice';
 import { StorageService } from '../storageService';
+import { Upload } from '@aws-sdk/lib-storage';
 
 // 可重试的错误类型
 const RETRYABLE_ERRORS = [
@@ -168,7 +169,7 @@ export class UploadsService {
   }
 
   /**
-   * 单部分上传（支持断点续传）
+   * 单部分上传（支持进度跟踪）
    */
   private async uploadSinglePart(
     file: File,
@@ -178,11 +179,10 @@ export class UploadsService {
     taskId: string,
     abortController: AbortController
   ): Promise<TransferTask> {
-    const chunkSize = 1024 * 1024; // 1MB chunks
-    const chunks: TransferChunk[] = [];
-    let transferred = 0;
     const total = file.size;
     const startTime = Date.now();
+    let lastUpdateTime = Date.now();
+    let lastTransferred = 0;
 
     // 更新状态为上传中
     this.dispatch(updateTransferTask({
@@ -190,7 +190,7 @@ export class UploadsService {
       status: 'uploading',
     }));
 
-    for (let i = 0; i < file.size; i += chunkSize) {
+    try {
       // 检查是否被暂停或取消
       if (abortController.signal.aborted) {
         const abortError = new Error('Upload aborted');
@@ -198,67 +198,105 @@ export class UploadsService {
         throw abortError;
       }
 
-      const chunk = file.slice(i, Math.min(i + chunkSize, file.size));
-      const chunkNumber = Math.floor(i / chunkSize) + 1;
-      
-      try {
-        // 将 Blob 转换为 Uint8Array
-        const arrayBuffer = await chunk.arrayBuffer();
-        const uint8Array = new Uint8Array(arrayBuffer);
-        const response = await this.s3ClientManager.putObject(connectionId, bucket, key, uint8Array);
-        
-        transferred += chunk.size;
-        
-        // 计算速度和进度
-        const elapsed = (Date.now() - startTime) / 1000;
-        const speed = elapsed > 0 ? transferred / elapsed : 0;
-        const progress = (transferred / total) * 100;
-
-        // 更新进度
-        this.dispatch(updateTransferTask({
-          id: taskId,
-          progress,
-          speed,
-          transferred,
-          chunks: [...chunks, {
-            partNumber: chunkNumber,
-            size: chunk.size,
-            etag: response.etag,
-            transferred: chunk.size,
-            status: 'completed' as const,
-          }],
-        }));
-      } catch (error) {
-        console.error(`Chunk ${chunkNumber} upload failed:`, error);
-        throw error;
+      const client = this.s3ClientManager.getClient(connectionId);
+      if (!client) {
+        throw new Error('No client found for connection');
       }
+
+      // 使用 @aws-sdk/lib-storage 的 Upload 类，支持进度跟踪
+      const upload = new Upload({
+        client,
+        params: {
+          Bucket: bucket,
+          Key: key,
+          Body: file,
+        },
+        queueSize: 4, // 并发上传数
+        partSize: 5 * 1024 * 1024, // 每个分片 5MB
+        leavePartsOnError: false,
+      });
+
+      // 监听进度事件
+      upload.on('httpUploadProgress', (progress) => {
+        const loaded = progress.loaded ?? 0;
+        const progressTotal = progress.total ?? total;
+        const now = Date.now();
+        const elapsed = (now - lastUpdateTime) / 1000;
+        
+        // 计算速度 (bytes per second)
+        let speed = 0;
+        if (elapsed > 0) {
+          speed = (loaded - lastTransferred) / elapsed;
+        }
+        
+        // 计算进度百分比
+        const progressPercent = progressTotal > 0 ? Math.round((loaded / progressTotal) * 100) : 0;
+
+        // 每 100ms 更新一次，避免过于频繁的 dispatch
+        if (now - lastUpdateTime > 100 || progressPercent === 100) {
+          this.dispatch(updateTransferTask({
+            id: taskId,
+            progress: progressPercent,
+            transferred: loaded,
+            total: progressTotal,
+            speed: speed > 0 ? speed : 0,
+          }));
+          
+          lastUpdateTime = now;
+          lastTransferred = loaded;
+        }
+      });
+
+      // 处理取消
+      const abortHandler = () => {
+        upload.abort();
+      };
+      abortController.signal.addEventListener('abort', abortHandler);
+
+      const response = await upload.done();
+      
+      // 移除事件监听
+      abortController.signal.removeEventListener('abort', abortHandler);
+      
+      // 计算平均速度
+      const totalElapsed = (Date.now() - startTime) / 1000;
+      const avgSpeed = totalElapsed > 0 ? total / totalElapsed : 0;
+
+      // 上传完成
+      const completedTask: TransferTask = {
+        id: taskId,
+        type: 'upload',
+        fileName: file.name,
+        key,
+        bucket,
+        connectionId,
+        status: 'completed',
+        progress: 100,
+        speed: avgSpeed,
+        transferred: total,
+        total,
+        chunks: [{
+          partNumber: 1,
+          size: total,
+          etag: response.ETag || '',
+          transferred: total,
+          status: 'completed' as const,
+        }],
+        resumable: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      this.dispatch(updateTransferTask(completedTask));
+      
+      // 清理内存中的 File 对象
+      this.getUploadFiles().delete(taskId);
+      
+      return completedTask;
+    } catch (error) {
+      console.error(`File upload failed:`, error);
+      throw error;
     }
-
-    // 上传完成
-    const completedTask: TransferTask = {
-      id: taskId,
-      type: 'upload',
-      fileName: file.name,
-      key,
-      bucket,
-      connectionId,
-      status: 'completed',
-      progress: 100,
-      speed: 0,
-      transferred: total,
-      total,
-      chunks,
-      resumable: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    this.dispatch(updateTransferTask(completedTask));
-    
-    // 清理内存中的 File 对象
-    this.getUploadFiles().delete(taskId);
-    
-    return completedTask;
   }
 
   /**

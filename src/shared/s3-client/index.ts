@@ -238,13 +238,14 @@ export class S3ClientManager {
     }));
   }
 
-  async getObject(connectionId: string, bucket: string, key: string): Promise<any> {
+  async getObject(connectionId: string, bucket: string, key: string, range?: string): Promise<any> {
     const client = this.getClient(connectionId);
     if (!client) throw new Error('No client found for connection');
 
     const command = new GetObjectCommand({
       Bucket: bucket,
-      Key: key
+      Key: key,
+      ...(range && { Range: range })
     });
 
     return await client.send(command);

@@ -2,15 +2,15 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux';
 import type { RootState, AppDispatch } from '../renderer/store';
 import type { ConnectionItem, Bucket } from '../shared/types';
-import { 
-  setCurrentConnection, 
-  addFolder, 
-  deleteItem, 
+import {
+  setCurrentConnection,
+  addFolder,
+  deleteItem,
   updateFolder,
-  moveItem 
+  moveItem
 } from '../renderer/store/slices/connectionsSlice';
 import { setCurrentBucket, setFiles, setCurrentPath, setBuckets } from '../renderer/store/slices/filesSlice';
-import { S3Service } from '../renderer/services/s3Service';
+import { S3Service } from '../renderer/services/modules';
 import { 
   HardDrive, 
   ChevronRight, 

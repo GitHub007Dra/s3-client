@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../renderer/store';
 import type { ConnectionConfig, ConnectionItem } from '../shared/types';
-import { S3Service } from '../renderer/services/s3Service';
+import { S3Service } from '../renderer/services/modules';
 import { addConnection, updateConnection, setCurrentConnection } from '../renderer/store/slices/connectionsSlice';
 import { setBuckets, setCurrentBucket, setFiles, setCurrentPath } from '../renderer/store/slices/filesSlice';
 import { Database, X } from 'lucide-react';

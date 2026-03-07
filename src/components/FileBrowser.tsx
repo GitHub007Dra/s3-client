@@ -493,10 +493,18 @@ const FileBrowser: React.FC<FileBrowserProps> = ({ bucket, connectionId }) => {
 
   const formatSize = (bytes: number): string => {
     if (bytes === 0) return '-';
-    const k = 1024;
+    
+    // 检测操作系统平台
+    const userAgent = navigator.userAgent.toLowerCase();
+    const isWindows = userAgent.includes('win');
+    
+    // Windows 使用二进制 (1024)，macOS/Linux 使用十进制 (1000)
+    const k = isWindows ? 1024 : 1000;
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    
+    // 显示 1 位小数
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
   const formatDate = (date: Date): string => {
