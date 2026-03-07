@@ -14,12 +14,16 @@ function getIndexHtmlPath(): string {
 }
 
 function createWindow() {
+  // 获取图标路径
+  const iconPath = path.join(__dirname, '..', '..', 'build', 'icon.png');
+  
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 800,
     minHeight: 600,
     useContentSize: true,
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -42,6 +46,12 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // 设置应用Dock图标（macOS）
+  if (process.platform === 'darwin') {
+    const iconPath = path.join(__dirname, '..', '..', 'build', 'icon.png');
+    app.dock.setIcon(iconPath);
+  }
+  
   createWindow();
 
   app.on('activate', () => {

@@ -7,6 +7,7 @@
   },
   "files": [
     "dist/**/*",
+    "build/**/*",
     "!dist/mac-arm64",
     "!dist/S3 Client-0.0.0-arm64.dmg",
     "!dist/S3 Client-0.0.0-arm64.dmg.blockmap"
@@ -15,6 +16,14 @@
     "target": "dmg",
     "category": "public.app-category.developer-tools",
     "icon": "build/icon.icns"
+  },
+  "win": {
+    "target": "nsis",
+    "icon": "build/icon.ico"
+  },
+  "linux": {
+    "target": "AppImage",
+    "icon": "build"
   },
   "extraMetadata": {
     "main": "dist/main/index.js"
