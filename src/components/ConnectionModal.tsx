@@ -244,7 +244,7 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({
                   value={accessKey}
                   onChange={(e) => setAccessKey(e.target.value)}
                   className="form-input"
-                  placeholder="AKIAIOSFODNN7EXAMPLE"
+                  placeholder="Enter your Access Key ID"
                 />
               </div>
 
@@ -255,7 +255,7 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({
                   value={secretKey}
                   onChange={(e) => setSecretKey(e.target.value)}
                   className="form-input"
-                  placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+                  placeholder="Enter your Secret Access Key"
                 />
               </div>
 

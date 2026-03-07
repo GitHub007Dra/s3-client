@@ -13,7 +13,8 @@
   ],
   "mac": {
     "target": "dmg",
-    "category": "public.app-category.developer-tools"
+    "category": "public.app-category.developer-tools",
+    "icon": "build/icon.icns"
   },
   "extraMetadata": {
     "main": "dist/main/index.js"

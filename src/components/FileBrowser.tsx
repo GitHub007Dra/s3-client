@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import type { RootState, AppDispatch } from '../renderer/store';
 import type { FileItem, Bucket } from '../shared/types';
 import { setFiles, setCurrentPath, setBreadcrumb, setLoading, setError } from '../renderer/store/slices/filesSlice';
-import { S3Service } from '../renderer/services/s3Service';
+import { S3Service } from '../renderer/services/modules';
 import { Folder, FileText, Download, Share2, Trash2 } from 'lucide-react';
 
 interface FileBrowserProps {

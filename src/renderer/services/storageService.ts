@@ -6,10 +6,43 @@ const STORAGE_KEY = 's3-client-connections';
 const THEME_KEY = 's3-client-theme';
 const TRANSFERS_KEY = 's3-client-transfers';
 
+// 安全配置：是否使用安全存储模式
+// 启用后，凭证将使用 sessionStorage（关闭标签页后自动清除）
+let useSecureStorage = false;
+
 export class StorageService {
+  /**
+   * 启用安全存储模式
+   * 启用后，凭证将存储在 sessionStorage 中，关闭标签页后自动清除
+   * 注意：这会影响用户体验，用户每次打开应用都需要重新输入凭证
+   */
+  static setSecureStorage(enabled: boolean): void {
+    useSecureStorage = enabled;
+  }
+
+  /**
+   * 获取当前存储对象（localStorage 或 sessionStorage）
+   */
+  private static getStorage(): Storage {
+    return useSecureStorage ? sessionStorage : localStorage;
+  }
+
+  /**
+   * 清除所有敏感数据（凭证）
+   * 建议在用户登出或应用关闭时调用
+   */
+  static clearSensitiveData(): void {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+      console.error('Failed to clear sensitive data:', error);
+    }
+  }
+
   static saveConnections(items: ConnectionItem[]): void {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      this.getStorage().setItem(STORAGE_KEY, JSON.stringify(items));
     } catch (error) {
       console.error('Failed to save connections:', error);
     }
@@ -17,7 +50,7 @@ export class StorageService {
 
   static loadConnections(): ConnectionItem[] {
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
+      const data = this.getStorage().getItem(STORAGE_KEY);
       if (!data) return [];
       
       const parsed = JSON.parse(data);
@@ -81,7 +114,7 @@ export class StorageService {
 
   static clearConnections(): void {
     try {
-      localStorage.removeItem(STORAGE_KEY);
+      this.getStorage().removeItem(STORAGE_KEY);
     } catch (error) {
       console.error('Failed to clear connections:', error);
     }
@@ -90,6 +123,7 @@ export class StorageService {
   // 主题相关方法
   static saveTheme(theme: ThemeMode): void {
     try {
+      // 主题设置使用 localStorage（不需要加密，用户体验优先）
       localStorage.setItem(THEME_KEY, theme);
     } catch (error) {
       console.error('Failed to save theme:', error);
@@ -98,6 +132,7 @@ export class StorageService {
 
   static loadTheme(): ThemeMode {
     try {
+      // 主题设置使用 localStorage
       const theme = localStorage.getItem(THEME_KEY);
       return (theme as ThemeMode) || 'light';
     } catch (error) {
@@ -126,6 +161,7 @@ export class StorageService {
         }
       });
 
+      // 传输任务信息可以保存在 localStorage（不包含敏感凭证）
       localStorage.setItem(TRANSFERS_KEY, JSON.stringify(resumableTasks));
     } catch (error) {
       console.error('Failed to save transfers:', error);
@@ -134,6 +170,7 @@ export class StorageService {
 
   static loadTransfers(): TransferTask[] {
     try {
+      // 传输任务信息从 localStorage 读取
       const data = localStorage.getItem(TRANSFERS_KEY);
       if (!data) return [];
       
@@ -163,6 +200,7 @@ export class StorageService {
 
   static clearTransfers(): void {
     try {
+      // 传输任务信息从 localStorage 清除
       localStorage.removeItem(TRANSFERS_KEY);
     } catch (error) {
       console.error('Failed to clear transfers:', error);
@@ -172,6 +210,7 @@ export class StorageService {
   // 保存单个传输任务
   static saveTransferTask(task: TransferTask): void {
     try {
+      // 传输任务信息从 localStorage 读取
       const existingData = localStorage.getItem(TRANSFERS_KEY);
       const tasks: Record<string, TransferTask> = existingData ? JSON.parse(existingData) : {};
       
@@ -193,6 +232,7 @@ export class StorageService {
   // 删除单个传输任务
   static removeTransferTask(taskId: string): void {
     try {
+      // 传输任务信息从 localStorage 读取
       const existingData = localStorage.getItem(TRANSFERS_KEY);
       if (!existingData) return;
       

@@ -4,7 +4,7 @@ import { store } from './renderer/store';
 import type { AppDispatch } from './renderer/store';
 import { addTransferTask } from './renderer/store/slices/transfersSlice';
 import { StorageService } from './renderer/services/storageService';
-import { S3Service } from './renderer/services/s3Service';
+import { S3Service } from './renderer/services/modules';
 import Sidebar from './components/Sidebar';
 import FileBrowser from './components/FileBrowser';
 import ConnectionModal from './components/ConnectionModal';
