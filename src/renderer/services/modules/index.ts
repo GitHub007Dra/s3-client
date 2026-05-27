@@ -170,13 +170,8 @@ export class S3Service {
           throw new Error('Upload resume requires file');
         }
 
-        // 重新上传整个文件（简化版）
-        await this.uploadsService.uploadFile(
-          uploadFile,
-          task.connectionId,
-          task.bucket,
-          task.key
-        );
+        // 当前上传实现无法复用旧 uploadId，但继续使用原任务 ID，避免恢复时出现重复任务。
+        await this.uploadsService.restartUpload(task, uploadFile);
       } else if (task.type === 'download') {
         // 使用断点续传恢复下载
         await this.downloadsService.resumeDownload(task, fileHandle);

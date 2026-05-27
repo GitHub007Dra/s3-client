@@ -61,6 +61,39 @@ const initialState: TransfersState = {
   pausedTasks: [],
 };
 
+const removeTaskFromStatusLists = (state: TransfersState, id: string) => {
+  state.activeTasks = state.activeTasks.filter((tid) => tid !== id);
+  state.pausedTasks = state.pausedTasks.filter((tid) => tid !== id);
+  state.completedTasks = state.completedTasks.filter((tid) => tid !== id);
+  state.failedTasks = state.failedTasks.filter((tid) => tid !== id);
+};
+
+const addTaskToStatusList = (state: TransfersState, task: TransferTask) => {
+  switch (task.status) {
+    case 'uploading':
+    case 'downloading':
+      if (!state.activeTasks.includes(task.id)) {
+        state.activeTasks.push(task.id);
+      }
+      break;
+    case 'paused':
+      if (!state.pausedTasks.includes(task.id)) {
+        state.pausedTasks.push(task.id);
+      }
+      break;
+    case 'completed':
+      if (!state.completedTasks.includes(task.id)) {
+        state.completedTasks.push(task.id);
+      }
+      break;
+    case 'failed':
+      if (!state.failedTasks.includes(task.id)) {
+        state.failedTasks.push(task.id);
+      }
+      break;
+  }
+};
+
 const transfersSlice = createSlice({
   name: 'transfers',
   initialState,
@@ -69,11 +102,8 @@ const transfersSlice = createSlice({
     addTransferTask: (state, action: PayloadAction<TransferTask>) => {
       const task = action.payload;
       state.tasks[task.id] = task;
-      if (task.status === 'uploading' || task.status === 'downloading') {
-        state.activeTasks.push(task.id);
-      } else if (task.status === 'paused') {
-        state.pausedTasks.push(task.id);
-      }
+      removeTaskFromStatusLists(state, task.id);
+      addTaskToStatusList(state, task);
     },
 
     // 更新传输任务
@@ -89,35 +119,8 @@ const transfersSlice = createSlice({
       const newStatus = updates.status;
       if (newStatus) {
         // 从所有状态列表中移除
-        state.activeTasks = state.activeTasks.filter((tid) => tid !== id);
-        state.pausedTasks = state.pausedTasks.filter((tid) => tid !== id);
-        state.completedTasks = state.completedTasks.filter((tid) => tid !== id);
-        state.failedTasks = state.failedTasks.filter((tid) => tid !== id);
-
-        // 根据新状态添加到对应列表
-        switch (newStatus) {
-          case 'uploading':
-          case 'downloading':
-            if (!state.activeTasks.includes(id)) {
-              state.activeTasks.push(id);
-            }
-            break;
-          case 'paused':
-            if (!state.pausedTasks.includes(id)) {
-              state.pausedTasks.push(id);
-            }
-            break;
-          case 'completed':
-            if (!state.completedTasks.includes(id)) {
-              state.completedTasks.push(id);
-            }
-            break;
-          case 'failed':
-            if (!state.failedTasks.includes(id)) {
-              state.failedTasks.push(id);
-            }
-            break;
-        }
+        removeTaskFromStatusLists(state, id);
+        addTaskToStatusList(state, task);
       }
     },
 
@@ -139,10 +142,12 @@ const transfersSlice = createSlice({
     resumeTransferTask: (state, action: PayloadAction<string>) => {
       const id = action.payload;
       const task = state.tasks[id];
-      if (task && task.status === 'paused') {
+      if (task && (task.status === 'paused' || task.status === 'failed')) {
         task.status = task.type === 'upload' ? 'uploading' : 'downloading';
+        task.speed = 0;
+        task.error = undefined;
         task.updatedAt = new Date();
-        state.pausedTasks = state.pausedTasks.filter((tid) => tid !== id);
+        removeTaskFromStatusLists(state, id);
         if (!state.activeTasks.includes(id)) {
           state.activeTasks.push(id);
         }
@@ -155,9 +160,9 @@ const transfersSlice = createSlice({
       const task = state.tasks[id];
       if (task) {
         task.status = 'cancelled';
+        task.speed = 0;
         task.updatedAt = new Date();
-        state.activeTasks = state.activeTasks.filter((tid) => tid !== id);
-        state.pausedTasks = state.pausedTasks.filter((tid) => tid !== id);
+        removeTaskFromStatusLists(state, id);
       }
     },
 
@@ -209,7 +214,7 @@ const transfersSlice = createSlice({
       // 重新计算进度
       const totalTransferred = task.chunks.reduce((sum, c) => sum + c.transferred, 0);
       task.transferred = totalTransferred;
-      task.progress = Math.min(100, (totalTransferred / task.total) * 100);
+      task.progress = task.total > 0 ? Math.min(100, (totalTransferred / task.total) * 100) : 0;
       task.updatedAt = new Date();
     },
   },

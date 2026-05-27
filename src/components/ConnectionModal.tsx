@@ -5,7 +5,7 @@ import type { ConnectionConfig, ConnectionItem } from '../shared/types';
 import { S3Service } from '../renderer/services/modules';
 import { addConnection, updateConnection, setCurrentConnection } from '../renderer/store/slices/connectionsSlice';
 import { setBuckets, setCurrentBucket, setFiles, setCurrentPath } from '../renderer/store/slices/filesSlice';
-import { Database, X } from 'lucide-react';
+import { ChevronDown, Database, X } from 'lucide-react';
 
 interface ConnectionModalProps {
   isOpen: boolean;
@@ -33,6 +33,7 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({
   const [accessKey, setAccessKey] = useState('');
   const [secretKey, setSecretKey] = useState('');
   const [sessionToken, setSessionToken] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -54,6 +55,7 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({
         setAccessKey(conn.accessKeyId);
         setSecretKey(conn.secretAccessKey);
         setSessionToken(conn.sessionToken || '');
+        setShowAdvanced(Boolean(conn.region || conn.sessionToken));
       } else {
         // 新建模式：清空表单，使用默认值
         setConnectionName('');
@@ -62,6 +64,7 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({
         setAccessKey('');
         setSecretKey('');
         setSessionToken('');
+        setShowAdvanced(false);
       }
       setTestResult(null);
     }
@@ -224,20 +227,6 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({
               </div>
 
               <div className="form-group">
-                <label className="form-label">
-                  Region 区域
-                  <span className="form-hint">（默认: {DEFAULT_VALUES.region}）</span>
-                </label>
-                <input
-                  type="text"
-                  value={region}
-                  onChange={(e) => setRegion(e.target.value)}
-                  className="form-input"
-                  placeholder={DEFAULT_VALUES.region}
-                />
-              </div>
-
-              <div className="form-group">
                 <label className="form-label">Access Key ID *</label>
                 <input
                   type="text"
@@ -258,20 +247,49 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({
                   placeholder="Enter your Secret Access Key"
                 />
               </div>
+            </div>
 
-              <div className="form-group">
-                <label className="form-label">
-                  Session Token
-                  <span className="form-hint">（可选）</span>
-                </label>
-                <input
-                  type="text"
-                  value={sessionToken}
-                  onChange={(e) => setSessionToken(e.target.value)}
-                  className="form-input"
-                  placeholder="临时凭证的会话令牌"
-                />
-              </div>
+            <div className="form-advanced">
+              <button
+                type="button"
+                className={`advanced-toggle ${showAdvanced ? 'expanded' : ''}`}
+                onClick={() => setShowAdvanced((value) => !value)}
+              >
+                <ChevronDown size={14} />
+                <span>高级选项</span>
+              </button>
+
+              {showAdvanced && (
+                <div className="advanced-grid">
+                  <div className="form-group">
+                    <label className="form-label">
+                      Region 区域
+                      <span className="form-hint">（可选）</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={region}
+                      onChange={(e) => setRegion(e.target.value)}
+                      className="form-input"
+                      placeholder="例如 us-east-1"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">
+                      Session Token
+                      <span className="form-hint">（可选）</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={sessionToken}
+                      onChange={(e) => setSessionToken(e.target.value)}
+                      className="form-input"
+                      placeholder="临时凭证的会话令牌"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {testResult && (

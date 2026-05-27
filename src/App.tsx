@@ -4,7 +4,6 @@ import { store } from './renderer/store';
 import type { AppDispatch } from './renderer/store';
 import { addTransferTask } from './renderer/store/slices/transfersSlice';
 import { StorageService } from './renderer/services/storageService';
-import { S3Service } from './renderer/services/modules';
 import Sidebar from './components/Sidebar';
 import FileBrowser from './components/FileBrowser';
 import ConnectionModal from './components/ConnectionModal';
@@ -32,28 +31,7 @@ function AppContent() {
         });
         console.log(`Restored ${savedTasks.length} unfinished transfer tasks`);
 
-        // 自动恢复下载任务（不需要用户选择文件）
-        const s3Service = new S3Service(dispatch);
-        const downloadTasks = savedTasks.filter(
-          task => task.type === 'download' && task.status === 'failed'
-        );
-
-        for (const task of downloadTasks) {
-          try {
-            console.log(`Auto-resuming download: ${task.fileName}`);
-            await s3Service.resumeTransfer(task);
-          } catch (error) {
-            console.error(`Failed to auto-resume download ${task.id}:`, error);
-          }
-        }
-
-        // 上传任务需要用户重新选择文件，不自动恢复
-        const uploadTasks = savedTasks.filter(
-          task => task.type === 'upload' && task.status === 'failed'
-        );
-        if (uploadTasks.length > 0) {
-          console.log(`${uploadTasks.length} upload tasks need manual resume (file selection required)`);
-        }
+        console.log('Saved transfer tasks are available for manual resume');
       }
     };
 

@@ -62,6 +62,7 @@ export class DownloadsService {
   private static abortControllers: Map<string, AbortController> = new Map();
   // 存储下载文件句柄，用于断点续传
   private static downloadHandles: Map<string, { handle: FileSystemFileHandle; writable: FileSystemWritableFileStream }> = new Map();
+  private static cancelledTaskIds: Set<string> = new Set();
 
   constructor(s3ClientManager: S3ClientManager, dispatch: AppDispatch) {
     this.s3ClientManager = s3ClientManager;
@@ -74,6 +75,10 @@ export class DownloadsService {
 
   private getDownloadHandles(): Map<string, { handle: FileSystemFileHandle; writable: FileSystemWritableFileStream }> {
     return DownloadsService.downloadHandles;
+  }
+
+  private getCancelledTaskIds(): Set<string> {
+    return DownloadsService.cancelledTaskIds;
   }
 
   // 检查错误是否可重试
@@ -134,6 +139,7 @@ export class DownloadsService {
     fileName: string
   ): Promise<TransferTask> {
     const taskId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    this.getCancelledTaskIds().delete(taskId);
 
     // 先获取文件大小
     const objectInfo = await this.s3ClientManager.headObject(connectionId, bucket, key);
@@ -206,6 +212,7 @@ export class DownloadsService {
       throw error;
     } finally {
       this.getAbortControllers().delete(taskId);
+      this.getCancelledTaskIds().delete(taskId);
     }
   }
 
@@ -228,6 +235,8 @@ export class DownloadsService {
     this.dispatch(updateTransferTask({
       id: taskId,
       status: 'downloading',
+      speed: 0,
+      error: undefined,
     }));
 
     const startTime = Date.now();
@@ -267,7 +276,7 @@ export class DownloadsService {
           // 计算速度和进度
           const elapsed = (Date.now() - startTime) / 1000;
           const speed = elapsed > 0 ? (transferred - startByte) / elapsed : 0;
-          const progress = (transferred / totalSize) * 100;
+          const progress = totalSize > 0 ? (transferred / totalSize) * 100 : 0;
 
           // 记录分块信息
           const chunk: TransferChunk = {
@@ -352,6 +361,24 @@ export class DownloadsService {
       return completedTask;
     } catch (error: any) {
       if (error.name === 'AbortError') {
+        const wasCancelled = this.getCancelledTaskIds().has(taskId);
+        if (wasCancelled) {
+          try {
+            await writable.close();
+          } catch (closeError) {
+            console.warn('Failed to close cancelled download stream:', closeError);
+          }
+          this.getDownloadHandles().delete(taskId);
+          StorageService.removeTransferTask(taskId);
+          this.dispatch(updateTransferTask({
+            id: taskId,
+            status: 'cancelled',
+            speed: 0,
+            error: undefined,
+          }));
+          throw error;
+        }
+
         // 暂停 - 保存状态
         const pausedTask: TransferTask = {
           id: taskId,
@@ -361,7 +388,7 @@ export class DownloadsService {
           bucket,
           connectionId,
           status: 'paused',
-          progress: (transferred / totalSize) * 100,
+          progress: totalSize > 0 ? (transferred / totalSize) * 100 : 0,
           speed: 0,
           transferred,
           total: totalSize,
@@ -382,7 +409,7 @@ export class DownloadsService {
           bucket,
           connectionId,
           status: 'failed',
-          progress: (transferred / totalSize) * 100,
+          progress: totalSize > 0 ? (transferred / totalSize) * 100 : 0,
           speed: 0,
           transferred,
           total: totalSize,
@@ -412,6 +439,7 @@ export class DownloadsService {
   ): Promise<TransferTask> {
     const taskId = task.id;
     const startByte = task.transferred || 0;
+    this.getCancelledTaskIds().delete(taskId);
 
     // 创建 AbortController
     const abortController = new AbortController();
@@ -472,6 +500,7 @@ export class DownloadsService {
       throw error;
     } finally {
       this.getAbortControllers().delete(taskId);
+      this.getCancelledTaskIds().delete(taskId);
     }
   }
 
@@ -489,6 +518,7 @@ export class DownloadsService {
    * 取消下载
    */
   cancelDownload(taskId: string): void {
+    this.getCancelledTaskIds().add(taskId);
     const controller = this.getAbortControllers().get(taskId);
     if (controller) {
       controller.abort();

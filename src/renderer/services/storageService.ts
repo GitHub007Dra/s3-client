@@ -178,12 +178,6 @@ export class StorageService {
       const result: TransferTask[] = [];
       
       Object.values(tasks).forEach((task: any) => {
-        // 跳过无法恢复的上传任务（没有 localPath 且没有 file）
-        if (task.type === 'upload' && !task.localPath && !task.file) {
-          console.warn(`跳过无法恢复的上传任务: ${task.fileName}`);
-          return;
-        }
-        
         result.push({
           ...task,
           createdAt: new Date(task.createdAt),

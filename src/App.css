@@ -1312,10 +1312,6 @@ td.col-actions .action-btn-wrapper {
   flex-direction: column;
 }
 
-.form-group:last-child {
-  grid-column: span 2;
-}
-
 .form-label {
   font-size: 12px;
   font-weight: 500;
@@ -1341,6 +1337,50 @@ td.col-actions .action-btn-wrapper {
 
 .form-input::placeholder {
   color: #aaa;
+}
+
+.form-advanced {
+  margin-top: 12px;
+}
+
+.advanced-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.advanced-toggle svg {
+  transition: transform 0.15s ease;
+}
+
+.advanced-toggle.expanded svg {
+  transform: rotate(180deg);
+}
+
+.advanced-toggle:hover {
+  color: var(--text-primary);
+}
+
+.advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-light);
+}
+
+.form-hint {
+  color: var(--text-tertiary);
+  font-weight: 400;
+  margin-left: 4px;
 }
 
 .form-actions {
@@ -2006,7 +2046,7 @@ td.col-actions .action-btn-wrapper {
 .connection-tree {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 6px;
   min-height: 50px;
 }
 

@@ -7,6 +7,7 @@
   --transfer-primary: #6366f1;
   --transfer-primary-hover: #4f46e5;
   --transfer-success: #06b6d4;
+  --transfer-success-strong: #0f9f8f;
   --transfer-warning: #f59e0b;
   --transfer-error: #f43f5e;
   --transfer-muted: #94a3b8;
@@ -17,6 +18,7 @@
   --transfer-primary: #818cf8;
   --transfer-primary-hover: #6366f1;
   --transfer-success: #22d3ee;
+  --transfer-success-strong: #14b8a6;
   --transfer-warning: #fbbf24;
   --transfer-error: #fb7185;
   --transfer-muted: #64748b;
@@ -131,7 +133,7 @@
   bottom: 24px;
   right: 24px;
   width: 600px;
-  max-height: 600px;
+  height: min(600px, calc(100vh - 48px));
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: 16px;
@@ -175,9 +177,14 @@
 }
 
 .panel-icon {
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
-  color: var(--transfer-success);
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--transfer-success-strong);
+  background: rgba(15, 159, 143, 0.1);
 }
 
 .panel-icon svg {
@@ -248,8 +255,9 @@
    ============================================ */
 .transfer-tabs {
   display: flex;
-  gap: 4px;
-  padding: 12px 16px;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 18px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
 }
@@ -257,16 +265,21 @@
 .transfer-tab {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 8px 14px;
+  height: 38px;
+  min-width: 86px;
+  padding: 0 14px;
   font-size: 13px;
-  font-weight: 500;
-  border: none;
+  line-height: 1;
+  font-weight: 600;
+  border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
+  box-sizing: border-box;
 }
 
 .transfer-tab:hover {
@@ -276,22 +289,43 @@
 
 .transfer-tab.active {
   background: var(--transfer-success);
+  border-color: var(--transfer-success-strong);
   color: white;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.8);
+}
+
+.transfer-tab svg,
+.transfer-tab-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
 }
 
 .tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
   background: rgba(255, 255, 255, 0.2);
-  padding: 1px 6px;
-  border-radius: 8px;
+  padding: 0 6px;
+  border-radius: 999px;
   font-size: 11px;
+  line-height: 1;
 }
 
 .tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
   background: var(--transfer-warning);
   color: white;
-  padding: 1px 5px;
-  border-radius: 8px;
+  padding: 0 5px;
+  border-radius: 999px;
   font-size: 10px;
+  line-height: 1;
   font-weight: 600;
 }
 
@@ -300,9 +334,9 @@
    ============================================ */
 .transfer-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 12px;
-  max-height: 400px;
   background: var(--bg-primary);
 }
 
@@ -329,6 +363,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  min-height: 100%;
   padding: 48px 24px;
   color: var(--text-tertiary);
 }
@@ -655,6 +690,7 @@
     right: 16px;
     bottom: 16px;
     width: auto;
+    height: min(600px, calc(100vh - 32px));
   }
   
   .transfer-item-right {

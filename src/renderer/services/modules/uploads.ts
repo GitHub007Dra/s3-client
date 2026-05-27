@@ -39,6 +39,7 @@ export class UploadsService {
   private static abortControllers: Map<string, AbortController> = new Map();
   // 存储上传的 File 对象（Redux 不能序列化 File，需要在内存中保持引用）
   private static uploadFiles: Map<string, File> = new Map();
+  private static cancelledTaskIds: Set<string> = new Set();
 
   constructor(s3ClientManager: S3ClientManager, dispatch: AppDispatch) {
     this.s3ClientManager = s3ClientManager;
@@ -51,6 +52,10 @@ export class UploadsService {
 
   private getUploadFiles(): Map<string, File> {
     return UploadsService.uploadFiles;
+  }
+
+  private getCancelledTaskIds(): Set<string> {
+    return UploadsService.cancelledTaskIds;
   }
 
   // 检查错误是否可重试
@@ -106,6 +111,36 @@ export class UploadsService {
    */
   async uploadFile(file: File, connectionId: string, bucket: string, key: string): Promise<TransferTask> {
     const taskId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    return this.startUpload(file, connectionId, bucket, key, taskId, 0);
+  }
+
+  /**
+   * 使用已有任务 ID 重新开始上传。当前 SDK 上传路径无法真正复用旧 uploadId，
+   * 但保留任务 ID 可以避免恢复时在传输中心生成重复任务。
+   */
+  async restartUpload(
+    task: TransferTask,
+    file: File
+  ): Promise<TransferTask> {
+    return this.startUpload(
+      file,
+      task.connectionId,
+      task.bucket,
+      task.key,
+      task.id,
+      task.transferred
+    );
+  }
+
+  private async startUpload(
+    file: File,
+    connectionId: string,
+    bucket: string,
+    key: string,
+    taskId: string,
+    resumedFrom: number
+  ): Promise<TransferTask> {
+    this.getCancelledTaskIds().delete(taskId);
     
     // 将 File 存入内存 Map（Redux 不能序列化 File 对象）
     this.getUploadFiles().set(taskId, file);
@@ -124,6 +159,7 @@ export class UploadsService {
       total: file.size,
       chunks: [],
       resumable: true,
+      resumedFrom,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -145,9 +181,15 @@ export class UploadsService {
     } catch (error: any) {
       if (error.name === 'AbortError') {
         // 用户取消或暂停 - 保存任务状态到 storage
-        const currentTask = { ...task, status: 'paused' as const };
-        StorageService.saveTransferTask(currentTask);
-        this.dispatch(pauseTransferTask(taskId));
+        const wasCancelled = this.getCancelledTaskIds().has(taskId);
+        const currentTask = { ...task, status: wasCancelled ? 'cancelled' as const : 'paused' as const };
+        if (wasCancelled) {
+          StorageService.removeTransferTask(taskId);
+          this.dispatch(updateTransferTask({ id: taskId, status: 'cancelled', speed: 0 }));
+        } else {
+          StorageService.saveTransferTask(currentTask);
+          this.dispatch(pauseTransferTask(taskId));
+        }
       } else {
         // 保存失败状态到 storage
         const failedTask = { 
@@ -165,6 +207,7 @@ export class UploadsService {
       throw error;
     } finally {
       this.getAbortControllers().delete(taskId);
+      this.getCancelledTaskIds().delete(taskId);
     }
   }
 
@@ -334,6 +377,7 @@ export class UploadsService {
    * 取消上传
    */
   cancelUpload(taskId: string): void {
+    this.getCancelledTaskIds().add(taskId);
     const controller = this.getAbortControllers().get(taskId);
     if (controller) {
       controller.abort();
